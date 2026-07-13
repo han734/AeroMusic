@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-server
+dist-desktop
+release
+android
+.idea
+.git
+.env
+Dockerfile
+.dockerignore
+*.apk
+*.exe
+*.log

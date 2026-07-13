@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="classes5">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/dist-desktop-admin/win-unpacked/resources/app.asar.unpacked/node_modules/@capacitor/android/capacitor/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

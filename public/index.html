@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aero DJ Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="chat-container">
+    <header class="chat-header">
+      <h1>Aero DJ Assistant</h1>
+    </header>
+    <ul id="messages" class="chat-messages"></ul>
+    <form id="chat-form" class="chat-input">
+      <input type="text" id="msg" placeholder="Ask me anything…" autocomplete="off" required />
+      <button type="submit">Send</button>
+    </form>
+  <div class="downloads-section">
+  <h2>Downloaded Tracks</h2>
+  <button id="refresh-downloads">Refresh</button>
+  <ul id="downloaded-list" class="downloaded-list"></ul>
+</div>
+
+  <script src="app.js"></script>
+</body>
+</html>

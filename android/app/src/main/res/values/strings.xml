@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AeroMusic</string>
+    <string name="title_activity_main">AeroMusic</string>
+    <string name="package_name">com.aeromusic.premium</string>
+    <string name="custom_url_scheme">com.aeromusic.premium</string>
+</resources>

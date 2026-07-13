@@ -1,0 +1,17 @@
+[
+  {
+    "question": "Which composer wrote the Moonlight Sonata?",
+    "options": ["Ludwig van Beethoven", "Johann Sebastian Bach", "Wolfgang Amadeus Mozart", "Frédéric Chopin"],
+    "answer": "Ludwig van Beethoven"
+  },
+  {
+    "question": "What is the typical BPM of house music?",
+    "options": ["90", "110", "120", "140"],
+    "answer": "120"
+  },
+  {
+    "question": "Which instrument is known as the king of instruments?",
+    "options": ["Piano", "Organ", "Violin", "Saxophone"],
+    "answer": "Organ"
+  }
+]

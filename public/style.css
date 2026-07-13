@@ -1,0 +1,16 @@
+/* public/style.css */
+/* Premium glass‑morphism UI */
+html,body{margin:0;padding:0;height:100%;font-family:'Inter',sans-serif;background:#0e0e0e;color:#f0f0f0;display:flex;justify-content:center;align-items:center;}
+.chat-container{background:rgba(255,255,255,0.08);border-radius:12px;backdrop-filter:blur(12px);width:90%;max-width:560px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,0.6);}
+.chat-header{text-align:center;margin-bottom:10px;}
+.chat-messages{list-style:none;padding:0;margin:0;height:300px;overflow-y:auto;}
+.chat-messages li{margin:8px 0;padding:10px 14px;max-width:80%;border-radius:10px;}
+.chat-user{background:rgba(0,123,255,0.2);align-self:flex-end;}
+.chat-assistant{background:rgba(255,255,255,0.15);align-self:flex-start;}
+.chat-input{display:flex;margin-top:10px;}
+.chat-input input{flex:1;padding:10px;border:none;border-radius:8px;margin-right:8px;background:rgba(255,255,255,0.1);color:#fff;}
+.chat-input button{padding:10px 20px;background:#007bff;color:#fff;border:none;border-radius:8px;cursor:pointer;}
+.downloads-section{margin-top:20px;background:rgba(255,255,255,0.05);border-radius:10px;padding:12px;}
+.downloaded-list{list-style:none;padding:0;margin:0;}
+.downloaded-list li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;}
+.downloaded-list button{background:#ff4d4f;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;}

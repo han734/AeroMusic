@@ -1,0 +1,12 @@
+{
+  "appId": "com.aeromusic.premium",
+  "appName": "AeroMusic",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "hostname": "aero-music.app",
+    "allowNavigation": [
+      "*"
+    ]
+  }
+}

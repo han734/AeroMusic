@@ -1,0 +1,21 @@
+{
+  "short_name": "AeroMusic",
+  "name": "AeroMusic Premium Streamer",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=192&h=192&fit=crop",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=512&h=512&fit=crop",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#000000",
+  "theme_color": "#10b981",
+  "display": "standalone",
+  "orientation": "portrait"
+}

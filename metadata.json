@@ -1,0 +1,6 @@
+{
+  "name": "Premium Music Streamer",
+  "description": "A high-fidelity premium web music player designed for modern devices, featuring AI DJ playlist curation, YouTube stream search, and custom real-time lyrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

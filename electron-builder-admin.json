@@ -1,0 +1,20 @@
+{
+  "appId": "com.aeromusic.admin",
+  "productName": "AeroMusicAdmin",
+  "directories": {
+    "output": "dist-desktop-admin"
+  },
+  "files": [
+    "admin-fallback.html",
+    "electron-admin-main.cjs",
+    "electron-admin-preload.cjs",
+    "dist-server/**/*",
+    "dist/**/*",
+    "data/**/*"
+  ],
+  "asar": true,
+  "win": {
+    "target": "portable",
+    "icon": "icon.ico"
+  }
+}

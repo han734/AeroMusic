@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="feature-capacitor-android3">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/dist-desktop-admin/win-unpacked/resources/app.asar.unpacked/node_modules/@capacitor/android/capacitor/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-capacitor-android.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
