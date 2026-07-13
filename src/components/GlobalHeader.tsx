@@ -11,6 +11,7 @@ interface GlobalHeaderProps {
   privateSession: boolean;
   setPrivateSession: (val: boolean) => void;
   onUserProfileClick?: (username: string) => void;
+  onSupportClick?: () => void;
 }
 
 export default function GlobalHeader({
@@ -23,6 +24,7 @@ export default function GlobalHeader({
   privateSession,
   setPrivateSession,
   onUserProfileClick,
+  onSupportClick,
 }: GlobalHeaderProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
@@ -193,7 +195,11 @@ export default function GlobalHeader({
                 <button
                   onClick={() => {
                     setShowProfileMenu(false);
-                    window.open("https://support.spotify.com", "_blank");
+                    if (onSupportClick) {
+                      onSupportClick();
+                    } else {
+                      window.open("https://support.spotify.com", "_blank");
+                    }
                   }}
                   className="w-full text-left px-4 py-2.5 hover:bg-white/10 flex items-center justify-between transition cursor-pointer"
                 >

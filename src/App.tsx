@@ -66,6 +66,61 @@ export default function App() {
   const [lastRemoteSync, setLastRemoteSync] = useState<{ track: Track | null; isPlaying: boolean; progressSeconds: number; timestamp: number } | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
+
+  // Support complaint box states
+  const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
+  const [supportTitle, setSupportTitle] = useState<string>("");
+  const [supportDesc, setSupportDesc] = useState<string>("");
+  const [isSubmittingSupport, setIsSubmittingSupport] = useState<boolean>(false);
+  const [supportError, setSupportError] = useState<string>("");
+  const [supportSuccess, setSupportSuccess] = useState<boolean>(false);
+
+  const handleSubmitSupport = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supportTitle.trim() || !supportDesc.trim()) {
+      setSupportError("Please fill in both fields.");
+      return;
+    }
+    setSupportError("");
+    setIsSubmittingSupport(true);
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      const token = localStorage.getItem("aero-session-token");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${getApiBaseUrl() || ""}/api/support/ticket`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          title: supportTitle,
+          description: supportDesc
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSupportSuccess(true);
+        setSupportTitle("");
+        setSupportDesc("");
+        setTimeout(() => {
+          setShowSupportModal(false);
+          setSupportSuccess(false);
+        }, 2000);
+      } else {
+        setSupportError(data.error || "Submission failed.");
+      }
+    } catch (err) {
+      setSupportError("Connection error. Try again.");
+    } finally {
+      setIsSubmittingSupport(false);
+    }
+  }, [supportTitle, supportDesc]);
+
   const offlineGuestUser = useMemo(() => ({
     username: "Offline Guest",
     avatar: "📴",
@@ -1120,7 +1175,9 @@ export default function App() {
               setSelectedProfileUsername(username);
               setActiveTab("user-profile");
             }}
+            onSupportClick={() => setShowSupportModal(true)}
           />
+
           
           {isMobileWebView && !getApiBaseUrl() && (
             <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-2 text-[11px] text-amber-400 flex items-center justify-between gap-2 shrink-0 z-50">
@@ -1518,6 +1575,92 @@ export default function App() {
           </button>
         </div>
       )}
+      {/* Support Complaint Box Modal */}
+      {showSupportModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[10000] flex items-center justify-center p-4">
+          <div className="bg-[#121216]/95 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowSupportModal(false);
+                setSupportTitle("");
+                setSupportDesc("");
+                setSupportError("");
+              }}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white transition cursor-pointer"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+
+            <div className="mb-5">
+              <h2 className="text-xl font-bold font-heading text-white flex items-center gap-2">
+                <span>💬</span> Raise Complaint / Bug
+              </h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Describe the issue you're facing. Our admins will resolve it directly.
+              </p>
+            </div>
+
+            {supportSuccess ? (
+              <div className="py-8 text-center flex flex-col items-center justify-center">
+                <span className="text-4xl mb-3">✅</span>
+                <p className="text-sm font-bold text-white">Complaint Submitted!</p>
+                <p className="text-xs text-zinc-400 mt-1">Thank you. The window will close shortly.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitSupport} className="space-y-4">
+                {supportError && (
+                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold">
+                    {supportError}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Title / Issue Type</label>
+                  <input
+                    type="text"
+                    value={supportTitle}
+                    onChange={(e) => setSupportTitle(e.target.value)}
+                    placeholder="e.g. Playlist import failed, audio lagging"
+                    className="w-full bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Details / Steps to reproduce</label>
+                  <textarea
+                    value={supportDesc}
+                    onChange={(e) => setSupportDesc(e.target.value)}
+                    placeholder="Provide details about what went wrong..."
+                    rows={4}
+                    className="w-full bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition resize-none"
+                    required
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingSupport}
+                  className="w-full bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold py-2.5 rounded-lg text-sm transition cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSubmittingSupport ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    "Submit Complaint"
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

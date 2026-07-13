@@ -685,6 +685,45 @@
       from { transform: translateX(0); opacity: 1; }
       to { transform: translateX(120%); opacity: 0; }
     }
+
+    /* Tabs Styling */
+    .tabs-container {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #6b7280;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      border-radius: 8px;
+    }
+    .tab-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .tab-btn.active {
+      color: var(--color-primary-hover);
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .badge {
+      background: #ef4444;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+      font-weight: 800;
+    }
   </style>
 </head>
 <body>
@@ -721,76 +760,117 @@
     </header>
     
     <main>
-      <!-- Stats cards list -->
-      <div class="stats-grid">
-        <div class="stat-card total">
-          <div class="stat-info">
-            <span class="stat-value" id="stat-total">0</span>
-            <span class="stat-label">Total Accounts</span>
+      <!-- Tabs Navigation -->
+      <div class="tabs-container">
+        <button class="tab-btn active" id="tab-accounts" onclick="switchTab('accounts')">Accounts Manager</button>
+        <button class="tab-btn" id="tab-tickets" onclick="switchTab('tickets')">Support Tickets <span id="tickets-badge" class="badge" style="display: none;">0</span></button>
+      </div>
+
+      <!-- Accounts Manager Section -->
+      <div id="section-accounts">
+        <!-- Stats cards list -->
+        <div class="stats-grid">
+          <div class="stat-card total">
+            <div class="stat-info">
+              <span class="stat-value" id="stat-total">0</span>
+              <span class="stat-label">Total Accounts</span>
+            </div>
+            <div class="stat-icon">👥</div>
           </div>
-          <div class="stat-icon">👥</div>
+          
+          <div class="stat-card standard">
+            <div class="stat-info">
+              <span class="stat-value" id="stat-standard">0</span>
+              <span class="stat-label">Standard Users</span>
+            </div>
+            <div class="stat-icon">🎧</div>
+          </div>
+          
+          <div class="stat-card aeroplus">
+            <div class="stat-info">
+              <span class="stat-value" id="stat-aeroplus">0</span>
+              <span class="stat-label">Aero+ Members</span>
+            </div>
+            <div class="stat-icon">⚡</div>
+          </div>
+          
+          <div class="stat-card vip">
+            <div class="stat-info">
+              <span class="stat-value" id="stat-vip">0</span>
+              <span class="stat-label">VIP Members</span>
+            </div>
+            <div class="stat-icon">👑</div>
+          </div>
         </div>
         
-        <div class="stat-card standard">
-          <div class="stat-info">
-            <span class="stat-value" id="stat-standard">0</span>
-            <span class="stat-label">Standard Users</span>
+        <!-- User List Card wrapper -->
+        <div class="section-card">
+          <div class="section-header">
+            <h3 class="section-title">Accounts Management</h3>
+            
+            <div class="search-bar">
+              <span class="search-icon">🔍</span>
+              <input type="text" class="search-input" id="search-box" placeholder="Search by username..." oninput="filterUsers()">
+            </div>
           </div>
-          <div class="stat-icon">🎧</div>
-        </div>
-        
-        <div class="stat-card aeroplus">
-          <div class="stat-info">
-            <span class="stat-value" id="stat-aeroplus">0</span>
-            <span class="stat-label">Aero+ Members</span>
+          
+          <div class="table-container">
+            <table id="users-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Playlists</th>
+                  <th>Likes</th>
+                  <th>Active Badge</th>
+                  <th>Authorize Tier</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+            
+            <div class="loading-spinner-wrapper" id="table-loader">
+              <div class="spinner"></div>
+              <p style="font-size: 11px; font-weight: 600; font-family: 'Outfit';">Querying accounts database...</p>
+            </div>
+            
+            <div class="empty-state" id="table-empty" style="display: none;">
+              <p class="empty-state-title">No matching profiles found</p>
+              <p class="empty-state-desc">Verify search spellings and try again.</p>
+            </div>
           </div>
-          <div class="stat-icon">⚡</div>
-        </div>
-        
-        <div class="stat-card vip">
-          <div class="stat-info">
-            <span class="stat-value" id="stat-vip">0</span>
-            <span class="stat-label">VIP Members</span>
-          </div>
-          <div class="stat-icon">👑</div>
         </div>
       </div>
-      
-      <!-- User List Card wrapper -->
-      <div class="section-card">
-        <div class="section-header">
-          <h3 class="section-title">Accounts Management</h3>
-          
-          <div class="search-bar">
-            <span class="search-icon">🔍</span>
-            <input type="text" class="search-input" id="search-box" placeholder="Search by username..." oninput="filterUsers()">
-          </div>
-        </div>
-        
-        <div class="table-container">
-          <table id="users-table">
-            <thead>
-              <tr>
-                <th>Account</th>
-                <th>Playlists</th>
-                <th>Likes</th>
-                <th>Active Badge</th>
-                <th>Authorize Tier</th>
-              </tr>
-            </thead>
-            <tbody id="users-tbody">
-              <!-- Dynamically populated rows -->
-            </tbody>
-          </table>
-          
-          <div class="loading-spinner-wrapper" id="table-loader">
-            <div class="spinner"></div>
-            <p style="font-size: 11px; font-weight: 600; font-family: 'Outfit';">Querying accounts database...</p>
+
+      <!-- Support Tickets Section -->
+      <div id="section-tickets" style="display: none;">
+        <div class="section-card">
+          <div class="section-header">
+            <h3 class="section-title">Support Complaints & Bugs</h3>
           </div>
           
-          <div class="empty-state" id="table-empty" style="display: none;">
-            <p class="empty-state-title">No matching profiles found</p>
-            <p class="empty-state-desc">Verify search spellings and try again.</p>
+          <div class="table-container">
+            <table id="tickets-table">
+              <thead>
+                <tr>
+                  <th>Submitted At</th>
+                  <th>User</th>
+                  <th>Complaint</th>
+                  <th>Details</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="tickets-tbody">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+            
+            <div class="empty-state" id="tickets-empty" style="display: none;">
+              <p class="empty-state-title">No open support complaints</p>
+              <p class="empty-state-desc">Everything is resolved and running cleanly!</p>
+            </div>
           </div>
         </div>
       </div>
@@ -863,9 +943,104 @@
     
     async function loadDashboard() {
       showLoader(true);
-      await Promise.all([fetchStats(), fetchUsers()]);
+      await Promise.all([fetchStats(), fetchUsers(), fetchTickets()]);
       showLoader(false);
     }
+
+    function switchTab(tab) {
+      const tabAcc = document.getElementById("tab-accounts");
+      const tabTkt = document.getElementById("tab-tickets");
+      const secAcc = document.getElementById("section-accounts");
+      const secTkt = document.getElementById("section-tickets");
+
+      if (tab === "accounts") {
+        tabAcc.classList.add("active");
+        tabTkt.classList.remove("active");
+        secAcc.style.display = "block";
+        secTkt.style.display = "none";
+      } else {
+        tabTkt.classList.add("active");
+        tabAcc.classList.remove("active");
+        secTkt.style.display = "block";
+        secAcc.style.display = "none";
+      }
+    }
+
+    let allTickets = [];
+
+    async function fetchTickets() {
+      try {
+        const res = await fetch("/api/admin/tickets", {
+          headers: { "Authorization": `Bearer ${adminToken}` }
+        });
+        if (res.status === 401) {
+          logoutAdmin();
+          return;
+        }
+        const data = await res.json();
+        if (data.success) {
+          allTickets = data.tickets;
+          renderTickets(allTickets);
+        }
+      } catch (err) {
+        console.error("Error loading tickets:", err);
+      }
+    }
+
+    function renderTickets(ticketsList) {
+      const tbody = document.getElementById("tickets-tbody");
+      tbody.innerHTML = "";
+
+      const badge = document.getElementById("tickets-badge");
+      if (ticketsList.length > 0) {
+        badge.textContent = ticketsList.length;
+        badge.style.display = "inline-block";
+        document.getElementById("tickets-empty").style.display = "none";
+      } else {
+        badge.style.display = "none";
+        document.getElementById("tickets-empty").style.display = "block";
+      }
+
+      ticketsList.forEach(ticket => {
+        const tr = document.createElement("tr");
+        const dateStr = new Date(ticket.createdAt).toLocaleString();
+        tr.innerHTML = `
+          <td style="color: #9ca3af; font-family: monospace; font-size: 11px;">${dateStr}</td>
+          <td style="font-weight: 700; color: #f3f4f6;">${ticket.username}</td>
+          <td style="font-weight: 600; color: #fff;">${ticket.title}</td>
+          <td style="color: #d1d5db; max-width: 400px; white-space: normal; word-break: break-word;">${ticket.description}</td>
+          <td><span class="tier-badge" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">${ticket.status}</span></td>
+          <td>
+            <button class="logout-btn" onclick="resolveTicket('${ticket.id}')" style="border-color: #10b981; color: #10b981; padding: 6px 12px; font-size: 11px;">Resolve</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function resolveTicket(ticketId) {
+      try {
+        const res = await fetch("/api/admin/tickets/resolve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${adminToken}`
+          },
+          body: JSON.stringify({ ticketId })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showNotification("Ticket resolved successfully!", "success");
+          await fetchTickets();
+        } else {
+          showNotification(data.error || "Failed to resolve ticket.", "error");
+        }
+      } catch (err) {
+        console.error(err);
+        showNotification("Connection error, action failed.", "error");
+      }
+    }
+
     
     function showLoader(show) {
       document.getElementById("table-loader").style.display = show ? "flex" : "none";

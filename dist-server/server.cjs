@@ -31282,6 +31282,7 @@ app.post("/api/import-tracks", async (req, res) => {
 });
 var usersFilePath = import_path.default.join(writableDataDir, "users.json");
 var sessionsFilePath = import_path.default.join(writableDataDir, "sessions.json");
+var ticketsFilePath = import_path.default.join(writableDataDir, "tickets.json");
 async function fetchFromSupabase(key) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) return null;
   const url = `${process.env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/aero_storage?key=eq.${key}`;
@@ -31424,6 +31425,93 @@ async function writeUsers(users) {
   const gistPromise = saveToGist(users).then((ok) => {
     if (ok) console.log("Database: Saved users to secondary GitHub Gist.");
   });
+  await Promise.allSettled([supPromise, gistPromise]);
+}
+async function fetchTicketsFromGist() {
+  if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) return null;
+  const url = `https://api.github.com/gists/${process.env.GIST_ID}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": `token ${process.env.GITHUB_TOKEN}`,
+        "User-Agent": "AeroMusicServer/1.0.0"
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const fileContent = data.files?.["tickets.json"]?.content;
+    if (fileContent) {
+      return JSON.parse(fileContent);
+    }
+  } catch (err) {
+    console.error("GitHub Gist tickets read failed:", err);
+  }
+  return null;
+}
+async function saveTicketsToGist(value) {
+  if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) return false;
+  const url = `https://api.github.com/gists/${process.env.GIST_ID}`;
+  try {
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `token ${process.env.GITHUB_TOKEN}`,
+        "User-Agent": "AeroMusicServer/1.0.0",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        files: {
+          "tickets.json": {
+            content: JSON.stringify(value, null, 2)
+          }
+        }
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("GitHub Gist tickets write failed:", err);
+  }
+  return false;
+}
+function readTicketsLocal() {
+  try {
+    if (import_fs.default.existsSync(ticketsFilePath)) {
+      return JSON.parse(import_fs.default.readFileSync(ticketsFilePath, "utf8"));
+    }
+  } catch (e) {
+    console.error("Failed to read tickets locally:", e);
+  }
+  return [];
+}
+function writeTicketsLocal(tickets) {
+  try {
+    import_fs.default.writeFileSync(ticketsFilePath, JSON.stringify(tickets, null, 2), "utf8");
+  } catch (e) {
+    console.error("Failed to write tickets locally:", e);
+  }
+}
+async function readTickets() {
+  const supabaseTickets = await fetchFromSupabase("tickets");
+  if (supabaseTickets && Array.isArray(supabaseTickets)) {
+    writeTicketsLocal(supabaseTickets);
+    return supabaseTickets;
+  }
+  const gistTickets = await fetchTicketsFromGist();
+  if (gistTickets && Array.isArray(gistTickets)) {
+    writeTicketsLocal(gistTickets);
+    await saveToSupabase("tickets", gistTickets);
+    return gistTickets;
+  }
+  const localTickets = readTicketsLocal();
+  if (localTickets && localTickets.length > 0) {
+    await writeTickets(localTickets);
+  }
+  return localTickets;
+}
+async function writeTickets(tickets) {
+  writeTicketsLocal(tickets);
+  const supPromise = saveToSupabase("tickets", tickets);
+  const gistPromise = saveTicketsToGist(tickets);
   await Promise.allSettled([supPromise, gistPromise]);
 }
 function readSessions() {
@@ -31694,6 +31782,52 @@ app.post("/api/admin/update-tier", validateAdminToken, async (req, res) => {
   users[userIndex].tier = tier;
   await writeUsers(users);
   res.json({ success: true, message: `Successfully updated ${username} to ${tier}.` });
+});
+app.post("/api/support/ticket", async (req, res) => {
+  const { title, description } = req.body;
+  if (!title || !description) {
+    return res.status(400).json({ success: false, error: "Title and description are required." });
+  }
+  let username = "Guest";
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const token = authHeader.replace("Bearer ", "").trim();
+    const sessions = readSessions();
+    const session = sessions.find((s) => s.token === token);
+    if (session) {
+      username = session.username;
+    }
+  }
+  const tickets = await readTickets();
+  const newTicket = {
+    id: "ticket-" + import_crypto.default.randomBytes(8).toString("hex"),
+    username,
+    title: String(title).trim(),
+    description: String(description).trim(),
+    createdAt: Date.now(),
+    status: "Open"
+  };
+  tickets.push(newTicket);
+  await writeTickets(tickets);
+  res.json({ success: true, message: "Complaint submitted successfully." });
+});
+app.get("/api/admin/tickets", validateAdminToken, async (req, res) => {
+  const tickets = await readTickets();
+  res.json({ success: true, tickets });
+});
+app.post("/api/admin/tickets/resolve", validateAdminToken, async (req, res) => {
+  const { ticketId } = req.body;
+  if (!ticketId) {
+    return res.status(400).json({ success: false, error: "Ticket ID is required." });
+  }
+  const tickets = await readTickets();
+  const index = tickets.findIndex((t) => t.id === ticketId);
+  if (index === -1) {
+    return res.status(404).json({ success: false, error: "Ticket not found." });
+  }
+  tickets.splice(index, 1);
+  await writeTickets(tickets);
+  res.json({ success: true, message: "Ticket resolved successfully." });
 });
 app.post("/api/artist/profile", async (req, res) => {
   const { artistName } = req.body;
