@@ -46,6 +46,8 @@ export default function SettingsPanel({ currentUser, onLoginSuccess, onLogout }:
   const [showDevTools, setShowDevTools] = useState<boolean>(() => {
     return localStorage.getItem("aero-show-devtools") === "true";
   });
+  const [localLogs, setLocalLogs] = useState<string[]>([]);
+
 
   useEffect(() => {
     if ((window as any).appLogs) {
