@@ -11,10 +11,8 @@ COPY vite.config.ts ./
 # Install dependencies (including devDependencies for build step)
 RUN npm ci
 
-# Copy source code and config assets
-COPY src ./src
-COPY public ./public
-COPY server.ts ./server.ts
+# Copy all source files (uses .dockerignore to skip node_modules, local builds, .env etc.)
+COPY . .
 
 # Build frontend and bundle server
 RUN npm run build
