@@ -849,42 +849,6 @@ export default function App() {
     restoreSession();
   }, []);
 
-  // Initialize Android background audio playback service (if running in Capacitor Cordova mode)
-  useEffect(() => {
-    const initBackgroundMode = () => {
-      const win = window as any;
-      if (typeof window !== "undefined" && win.cordova?.plugins?.backgroundMode) {
-        const bgMode = win.cordova.plugins.backgroundMode;
-        try {
-          // Enable background mode execution
-          bgMode.enable();
-          
-          // Prevent back button from killing/terminating the app when backgrounded
-          bgMode.overrideBackButton();
-          
-          // Configure background notification text and properties
-          bgMode.setDefaults({
-            title: "AeroMusic Streamer",
-            text: "Playing music smoothly in the background.",
-            icon: "icon", // uses the native app launcher icon
-            color: "6b21a8", // dark violet header hex
-            resume: true,
-            hidden: false
-          });
-
-          console.log("Capacitor Android Background Playback Service initialized successfully.");
-        } catch (err) {
-          console.warn("Failed to configure background mode:", err);
-        }
-      }
-    };
-    
-    // Slight delay to ensure Cordova plugins are fully loaded on Webview ready
-    const timer = setTimeout(initBackgroundMode, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
-
   // Reset video override when track changes
   useEffect(() => {
     setActiveVideoIdOverride(null);
