@@ -5,6 +5,24 @@ const path = require('path');
 const http = require('http');
 const net = require('net');
 
+// Load environment variables from .env if present
+try {
+  const dotenv = require('dotenv');
+  const fs = require('fs');
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  } else {
+    const parentEnvPath = path.join(__dirname, '..', '.env');
+    if (fs.existsSync(parentEnvPath)) {
+      dotenv.config({ path: parentEnvPath });
+    }
+  }
+} catch (err) {
+  console.warn("dotenv could not be loaded in electron-main:", err);
+}
+
+
 let mainWindow = null;
 let serverPort = 3000;
 

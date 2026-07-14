@@ -54,6 +54,38 @@ try {
 Write-Host "Building web application and backend server..."
 cmd.exe /c "npm run build"
 
+# Pre-bake env credentials into server.cjs for packaged desktop standalone builds
+try {
+    if (Test-Path ".env") {
+        Write-Host "Baking environment variables into dist-server/server.cjs..."
+        $envLines = Get-Content -Path ".env"
+        $varsToBake = @("SUPABASE_URL", "SUPABASE_KEY", "GITHUB_TOKEN", "GIST_ID")
+        $bakeCode = ""
+        
+        foreach ($line in $envLines) {
+            foreach ($var in $varsToBake) {
+                if ($line -match "^$($var)=`"?(.*?)`"?$") {
+                    $val = $Matches[1].Replace('"', '\"')
+                    $bakeCode += "if (!process.env.$var) process.env.$var = `"$val`";`r`n"
+                }
+            }
+        }
+        
+        if ($bakeCode) {
+            $serverCjsPath = "dist-server/server.cjs"
+            if (Test-Path $serverCjsPath) {
+                $serverContent = Get-Content -Path $serverCjsPath -Raw
+                $serverContent = $bakeCode + $serverContent
+                Set-Content -Path $serverCjsPath -Value $serverContent -Force
+                Write-Host "Successfully baked credentials into server.cjs!"
+            }
+        }
+    }
+} catch {
+    Write-Warning "Failed to bake credentials into server.cjs: $_"
+}
+
+
 # 3. Build Portable Windows EXE
 Write-Host "Building portable Windows EXE..."
 cmd.exe /c "npm run electron:build"

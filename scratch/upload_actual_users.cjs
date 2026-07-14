@@ -6,9 +6,10 @@ const fs = require("fs");
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 async function uploadUsers() {
-  const usersFile = path.join(__dirname, "..", "data", "users.json");
+  const appData = process.env.APPDATA || (process.platform === 'win32' ? path.join(process.env.USERPROFILE, 'AppData', 'Roaming') : '');
+  const usersFile = path.join(appData, 'AeroMusic', 'data', 'users.json');
   if (!fs.existsSync(usersFile)) {
-    console.error("Local users.json file not found at:", usersFile);
+    console.error("Local AppData users.json file not found at:", usersFile);
     return;
   }
 
