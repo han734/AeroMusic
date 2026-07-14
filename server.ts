@@ -76,6 +76,17 @@ try {
 
 app.use(express.json());
 
+// Enable CORS for mobile webview support
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 const richBackupsPool = [
   { id: "fHI8X4OXluQ", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", duration: "3:21", genre: "Pop" },
   { id: "H5v3kku4y6Q", title: "As It Was", artist: "Harry Styles", album: "Harry's House", duration: "2:47", genre: "Indie Pop" },

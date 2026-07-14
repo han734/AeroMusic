@@ -23,13 +23,21 @@ export function getApiBaseUrl(): string {
   try {
     const saved = localStorage.getItem("aero-api-endpoint");
     if (saved) {
-      // If we are currently testing on localhost but have a stale LAN IP saved in localStorage, bypass it
-      const isLocalhost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
       const isSavedLanIp = saved.includes("192.168.") || saved.includes("10.") || saved.includes("172.");
-      if (isLocalhost && isSavedLanIp) {
-        return "http://localhost:3000";
+      const isCloudDefault = DEFAULT_API_ENDPOINT && (DEFAULT_API_ENDPOINT.includes("onrender.com") || DEFAULT_API_ENDPOINT.startsWith("https"));
+
+      if (isSavedLanIp && isCloudDefault) {
+        // Clear the stale LAN IP so we default back to the cloud URL
+        localStorage.removeItem("aero-api-endpoint");
+      } else {
+        const isCapacitor = typeof window !== "undefined" && !!(window as any).Capacitor;
+        const isLocalhost = typeof window !== "undefined" && !isCapacitor && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+        
+        if (isLocalhost && isSavedLanIp) {
+          return "http://localhost:3000";
+        }
+        return saved;
       }
-      return saved;
     }
   } catch (e) {
     // Ignore localStorage failures in some restrictive webviews
