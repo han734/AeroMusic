@@ -121,7 +121,7 @@ export default function MiniPlayer({
             onChange={(e) => onSeek(Number(e.target.value))}
             className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
           />
-          <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden relative">
+          <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden relative">
             <div
               className="absolute left-0 top-0 bottom-0 bg-violet-500 group-hover:bg-violet-400 rounded-full"
               style={{ width: `${percentProgress}%` }}

@@ -825,8 +825,13 @@ export default function App() {
             localStorage.setItem("premium-liked-tracks", JSON.stringify(data.user.likedTracks));
           }
         } else {
-          // Stale/expired token
-          localStorage.removeItem("aero-session-token");
+          // Only remove session token if explicitly unauthorized or forbidden by server
+          if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem("aero-session-token");
+          } else {
+            // Otherwise, treat as a temporary server issue and load cached session
+            throw new Error(`Temporary server error (${res.status})`);
+          }
         }
       } catch (err) {
         console.error("Session restoration failed, loading cached profile for offline resilience:", err);
@@ -847,6 +852,41 @@ export default function App() {
       }
     };
     restoreSession();
+  }, []);
+
+  // Initialize Android background audio playback service (if running in Capacitor Cordova mode)
+  useEffect(() => {
+    const initBackgroundMode = () => {
+      const win = window as any;
+      if (typeof window !== "undefined" && win.cordova?.plugins?.backgroundMode) {
+        const bgMode = win.cordova.plugins.backgroundMode;
+        try {
+          // Enable background mode execution
+          bgMode.enable();
+          
+          // Prevent back button from killing/terminating the app when backgrounded
+          bgMode.overrideBackButton();
+          
+          // Configure background notification text and properties
+          bgMode.setDefaults({
+            title: "AeroMusic Streamer",
+            text: "Playing music smoothly in the background.",
+            icon: "icon", // uses the native app launcher icon
+            color: "6b21a8", // dark violet header hex
+            resume: true,
+            hidden: false
+          });
+
+          console.log("Capacitor Android Background Playback Service initialized successfully.");
+        } catch (err) {
+          console.warn("Failed to configure background mode:", err);
+        }
+      }
+    };
+    
+    // Slight delay to ensure Cordova plugins are fully loaded on Webview ready
+    const timer = setTimeout(initBackgroundMode, 1000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Reset video override when track changes
@@ -1134,6 +1174,14 @@ export default function App() {
                 localStorage.setItem("aero-listening-username", user.username);
                 localStorage.setItem("aero-listening-avatar", user.avatar);
                 localStorage.setItem("aero-cached-profile", JSON.stringify(user));
+                if (user.playlists) {
+                  setPlaylists(user.playlists);
+                  localStorage.setItem("premium-custom-playlists", JSON.stringify(user.playlists));
+                }
+                if (user.likedTracks) {
+                  setLikedTracks(user.likedTracks);
+                  localStorage.setItem("premium-liked-tracks", JSON.stringify(user.likedTracks));
+                }
               }}
               onLogout={handleLogout}
               onContinueOffline={() => {

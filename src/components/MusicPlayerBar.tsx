@@ -187,14 +187,14 @@ export default function MusicPlayerBar({
           disabled={!currentTrack}
           className="absolute inset-0 w-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
         />
-        <div className="w-full h-1 bg-zinc-900 rounded-full relative overflow-hidden">
+        <div className="w-full h-1.5 bg-zinc-700 rounded-full relative overflow-hidden">
           <div
             className="absolute left-0 top-0 bottom-0 bg-violet-500 group-hover:bg-violet-400 rounded-full"
             style={{ width: `${percentProgress}%` }}
           />
         </div>
         <div
-          className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition shadow -translate-x-1/2 pointer-events-none"
+          className="absolute w-3 h-3 bg-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition shadow -translate-x-1/2 pointer-events-none"
           style={{ left: `${percentProgress}%` }}
         />
       </div>
