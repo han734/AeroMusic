@@ -290,7 +290,32 @@ async function deepSync() {
       console.log(`  Deep sync: Cached ${dedupedIndia.length} India new releases.`);
     }
   } catch (err: any) {
-    console.warn("  Deep sync: JioSaavn India failed:", err.message);
+    console.warn("  Deep sync: JioSaavn India failed, falling back to Apple Music India Top 50:", err.message || err);
+    try {
+      const appleRes = await fetch("https://rss.applemarketingtools.com/api/v2/in/music/most-played/50/songs.json", { signal: AbortSignal.timeout(8000) });
+      if (appleRes.ok) {
+        const appleData = await appleRes.json() as any;
+        if (appleData.feed?.results) {
+          const mapped = appleData.feed.results.map((item: any) => ({
+            id: `itunes-${item.id}`,
+            title: item.name,
+            artist: item.artistName,
+            album: item.collectionName || "Top Hit",
+            thumbnail: item.artworkUrl100
+              ? item.artworkUrl100.replace("/100x100bb.jpg", "/600x600bb.jpg")
+              : "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&h=300&fit=crop",
+            duration: "3:30",
+            genre: item.genres?.[0]?.name || "Music",
+          }));
+          if (mapped.length > 0) {
+            writeCache(indiaReleasesCache, mapped);
+            console.log(`  Deep sync fallback: Cached ${mapped.length} India new releases from Apple Music.`);
+          }
+        }
+      }
+    } catch (appleErr: any) {
+      console.error("  Deep sync fallback: Apple Music India failed:", appleErr.message || appleErr);
+    }
   }
 
   // 2. Apple Music global charts (US + GB + AU + CA)
@@ -1011,7 +1036,29 @@ app.get("/api/new-releases-india", async (req, res) => {
       }
     }
   } catch (err: any) {
-    console.warn("JioSaavn India new releases failed:", err.message || err);
+    console.warn("JioSaavn India new releases failed, falling back to Apple Music India Top 50:", err.message || err);
+    try {
+      const appleRes = await fetch("https://rss.applemarketingtools.com/api/v2/in/music/most-played/50/songs.json", { signal: AbortSignal.timeout(8000) });
+      if (appleRes.ok) {
+        const appleData = await appleRes.json() as any;
+        if (appleData.feed?.results) {
+          const mapped = appleData.feed.results.map((item: any) => ({
+            id: `itunes-${item.id}`,
+            title: item.name,
+            artist: item.artistName,
+            album: item.collectionName || "Top Hit",
+            thumbnail: item.artworkUrl100
+              ? item.artworkUrl100.replace("/100x100bb.jpg", "/600x600bb.jpg")
+              : "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&h=300&fit=crop",
+            duration: "3:30",
+            genre: item.genres?.[0]?.name || "Music",
+          }));
+          tracks.push(...mapped);
+        }
+      }
+    } catch (appleErr: any) {
+      console.error("Apple Music India fallback failed:", appleErr.message || appleErr);
+    }
   }
 
   const seen = new Set<string>();
