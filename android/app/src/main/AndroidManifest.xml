@@ -28,7 +28,7 @@
         </activity>
 
         <service
-            android:name="io.globules.backgroundMode.ForegroundService"
+            android:name="io.globules.cordova.plugin.ForegroundService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
 
