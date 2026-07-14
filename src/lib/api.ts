@@ -23,17 +23,17 @@ export function getApiBaseUrl(): string {
   try {
     const saved = localStorage.getItem("aero-api-endpoint");
     if (saved) {
-      const isSavedLanIp = saved.includes("192.168.") || saved.includes("10.") || saved.includes("172.");
+      const isSavedLocalIp = saved.includes("192.168.") || saved.includes("10.") || saved.includes("172.") || saved.includes("localhost") || saved.includes("127.0.0.1");
       const isCloudDefault = DEFAULT_API_ENDPOINT && (DEFAULT_API_ENDPOINT.includes("onrender.com") || DEFAULT_API_ENDPOINT.startsWith("https"));
 
-      if (isSavedLanIp && isCloudDefault) {
-        // Clear the stale LAN IP so we default back to the cloud URL
+      if (isSavedLocalIp && isCloudDefault) {
+        // Clear the stale local/LAN IP so we default back to the cloud URL
         localStorage.removeItem("aero-api-endpoint");
       } else {
         const isCapacitor = typeof window !== "undefined" && !!(window as any).Capacitor;
         const isLocalhost = typeof window !== "undefined" && !isCapacitor && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
         
-        if (isLocalhost && isSavedLanIp) {
+        if (isLocalhost && isSavedLocalIp) {
           return "http://localhost:3000";
         }
         return saved;

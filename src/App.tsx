@@ -729,13 +729,15 @@ export default function App() {
     }
   };
 
-  // Load standard songs & live releases on mount
+  // Load standard songs & live releases on mount, with auto-retry for Render spin-up tolerance
   useEffect(() => {
+    let active = true;
+
     const fetchCatalog = async () => {
       try {
         const response = await aeroFetch("/api/catalog");
         const data = await response.json();
-        if (data.success) {
+        if (data.success && active) {
           setCatalog(data.tracks || []);
           setTracksContext(data.tracks || []);
         }
@@ -743,22 +745,24 @@ export default function App() {
         console.error("Failed to load catalog:", e);
       }
     };
+
     const fetchNewReleases = async () => {
       try {
         const response = await aeroFetch("/api/new-releases");
         const data = await response.json();
-        if (data.success) {
+        if (data.success && active) {
           setNewReleases(data.tracks || []);
         }
       } catch (e) {
         console.error("Failed to load new releases:", e);
       }
     };
+
     const fetchDownloaded = async () => {
       try {
         const response = await aeroFetch("/api/downloaded");
         const data = await response.json();
-        if (data.success && data.tracks) {
+        if (data.success && data.tracks && active) {
           setDownloadedTracks((prev) => {
             const merged = [...prev];
             data.tracks.forEach((srvTrack: any) => {
@@ -774,10 +778,25 @@ export default function App() {
         console.error("Failed to load downloaded tracks from server:", e);
       }
     };
+
     fetchCatalog();
     fetchNewReleases();
     fetchDownloaded();
-  }, []);
+
+    const interval = setInterval(() => {
+      if (catalog.length === 0) {
+        fetchCatalog();
+      }
+      if (newReleases.length === 0) {
+        fetchNewReleases();
+      }
+    }, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [catalog.length, newReleases.length]);
 
   // Restore authenticated session on mount
   useEffect(() => {
