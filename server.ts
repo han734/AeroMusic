@@ -1514,22 +1514,26 @@ async function getPipedStreamUrl(videoId: string): Promise<{ url: string; mimeTy
     "https://pipedapi.darkness.services"
   ];
 
-  for (const instance of instances) {
+  const tasks = instances.map(async (instance) => {
     try {
-      const res = await fetch(`${instance}/streams/${videoId}`);
-      if (!res.ok) continue;
+      const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json() as any;
       if (data.audioStreams && data.audioStreams.length > 0) {
         const stream = data.audioStreams[0];
-        const url = stream.url;
-        const mimeType = stream.mimeType || "audio/mp4";
-        return { url, mimeType };
+        return { url: stream.url, mimeType: stream.mimeType || "audio/mp4" };
       }
     } catch (e: any) {
-      console.warn(`[stream-url] Piped API fail for ${instance}:`, e.message);
+      // Squelch individual failures, Promise.any will throw if all fail
     }
+    throw new Error("Failed resolving on " + instance);
+  });
+
+  try {
+    return await Promise.any(tasks);
+  } catch (err) {
+    return null;
   }
-  return null;
 }
 
 async function getInvidiousStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
@@ -1541,10 +1545,10 @@ async function getInvidiousStreamUrl(videoId: string): Promise<{ url: string; mi
     "https://invidious.slipfox.xyz"
   ];
 
-  for (const instance of instances) {
+  const tasks = instances.map(async (instance) => {
     try {
-      const res = await fetch(`${instance}/api/v1/videos/${videoId}`);
-      if (!res.ok) continue;
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json() as any;
       if (data.adaptiveFormats && data.adaptiveFormats.length > 0) {
         const audioStreams = data.adaptiveFormats.filter((f: any) => f.mimeType && f.mimeType.startsWith("audio/"));
@@ -1555,10 +1559,16 @@ async function getInvidiousStreamUrl(videoId: string): Promise<{ url: string; mi
         }
       }
     } catch (e: any) {
-      console.warn(`[stream-url] Invidious API fail for ${instance}:`, e.message);
+      // Squelch individual failures
     }
+    throw new Error("Failed resolving on " + instance);
+  });
+
+  try {
+    return await Promise.any(tasks);
+  } catch (err) {
+    return null;
   }
-  return null;
 }
 
 async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
@@ -1567,42 +1577,49 @@ async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType:
     return { url: cached.url, mimeType: cached.mimeType };
   }
 
-  try {
-    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-    const format = ytdl.chooseFormat(info.formats, {
-      quality: "highestaudio",
-      filter: "audioonly",
-    });
-    if (!format || !format.url) throw new Error("No audio format found");
+  // YouTube blocks cloud hosting IPs from scraping directly.
+  // If running on Render, skip ytdl-core entirely to save 3s of timeouts and proceed to fast parallel lookups.
+  const isRender = !!process.env.RENDER;
 
-    const expMatch = format.url.match(/[?&]expire=(\d+)/);
-    const expiresAt = expMatch ? parseInt(expMatch[1]) * 1000 : Date.now() + 4 * 3600_000;
-    const mimeType = format.mimeType?.split(";")[0] || "audio/mp4";
+  if (!isRender) {
+    try {
+      const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+      const format = ytdl.chooseFormat(info.formats, {
+        quality: "highestaudio",
+        filter: "audioonly",
+      });
+      if (format && format.url) {
+        const expMatch = format.url.match(/[?&]expire=(\d+)/);
+        const expiresAt = expMatch ? parseInt(expMatch[1]) * 1000 : Date.now() + 4 * 3600_000;
+        const mimeType = format.mimeType?.split(";")[0] || "audio/mp4";
 
-    streamUrlCache.set(videoId, { url: format.url, mimeType, expiresAt });
-    return { url: format.url, mimeType };
-  } catch (err: any) {
-    console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
-    
-    // Try fallback to Piped APIs
-    const piped = await getPipedStreamUrl(videoId);
-    if (piped) {
-      console.log(`[stream-url] Resolved ${videoId} successfully via Piped API fallback`);
-      const expiresAt = Date.now() + 2 * 3600_000;
-      streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
-      return piped;
+        streamUrlCache.set(videoId, { url: format.url, mimeType, expiresAt });
+        return { url: format.url, mimeType };
+      }
+    } catch (err: any) {
+      console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
     }
-
-    // Try fallback to Invidious APIs
-    const invidious = await getInvidiousStreamUrl(videoId);
-    if (invidious) {
-      console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API fallback`);
-      const expiresAt = Date.now() + 2 * 3600_000;
-      streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
-      return invidious;
-    }
-    return null;
   }
+
+  // Try parallel Piped API instances fallback
+  const piped = await getPipedStreamUrl(videoId);
+  if (piped) {
+    console.log(`[stream-url] Resolved ${videoId} successfully via Piped API parallel fallback`);
+    const expiresAt = Date.now() + 2 * 3600_000;
+    streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
+    return piped;
+  }
+
+  // Try parallel Invidious API instances fallback
+  const invidious = await getInvidiousStreamUrl(videoId);
+  if (invidious) {
+    console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API parallel fallback`);
+    const expiresAt = Date.now() + 2 * 3600_000;
+    streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
+    return invidious;
+  }
+
+  return null;
 }
 
 // Returns a same-origin proxy URL so the <audio> element never needs CORS

@@ -63289,7 +63289,8 @@ try {
 } catch (e) {
   console.warn("Failed to initialize writableDataDir or migrate legacy databases:", e);
 }
-app.use(import_express.default.json());
+app.use(import_express.default.json({ limit: "50mb" }));
+app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
