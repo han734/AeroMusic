@@ -179,8 +179,9 @@ export default function YoutubeStreamPlayer({
     aeroFetch(`/api/stream-url?id=${encodeURIComponent(videoId)}`)
       .then(r => r.json())
       .then(data => {
-        if (data.success && data.url) {
-          setStreamUrl(data.url);
+        if (data.success) {
+          const chosenUrl = isCapacitor ? (data.directUrl || data.url) : data.url;
+          setStreamUrl(chosenUrl);
         } else {
           console.warn("[AeroMusic] stream-url failed, falling back to YouTube IFrame");
         }

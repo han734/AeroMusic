@@ -1503,6 +1503,34 @@ function downloadTrackForOfflineCache(track: any): Promise<{ success: boolean; o
 
 const streamUrlCache = new Map<string, { url: string; mimeType: string; expiresAt: number }>();
 
+async function getPipedStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
+  const instances = [
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.owo.si",
+    "https://api.piped.private.coffee",
+    "https://pipedapi.ducks.party",
+    "https://pipedapi.drgns.space",
+    "https://pipedapi.darkness.services"
+  ];
+
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/streams/${videoId}`);
+      if (!res.ok) continue;
+      const data = await res.json() as any;
+      if (data.audioStreams && data.audioStreams.length > 0) {
+        const stream = data.audioStreams[0];
+        const url = stream.url;
+        const mimeType = stream.mimeType || "audio/mp4";
+        return { url, mimeType };
+      }
+    } catch (e: any) {
+      console.warn(`[stream-url] Piped API fail for ${instance}:`, e.message);
+    }
+  }
+  return null;
+}
+
 async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
   const cached = streamUrlCache.get(videoId);
   if (cached && cached.expiresAt > Date.now() + 60_000) {
@@ -1511,7 +1539,6 @@ async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType:
 
   try {
     const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-    // Pick highest-quality audio-only format (prefer m4a then webm)
     const format = ytdl.chooseFormat(info.formats, {
       quality: "highestaudio",
       filter: "audioonly",
@@ -1526,6 +1553,15 @@ async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType:
     return { url: format.url, mimeType };
   } catch (err: any) {
     console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
+    
+    // Try fallback to Piped APIs
+    const piped = await getPipedStreamUrl(videoId);
+    if (piped) {
+      console.log(`[stream-url] Resolved ${videoId} successfully via Piped API fallback`);
+      const expiresAt = Date.now() + 2 * 3600_000;
+      streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
+      return piped;
+    }
     return null;
   }
 }
@@ -1541,13 +1577,17 @@ app.get("/api/stream-url", async (req, res) => {
     return res.json({ success: true, url: `/api/offline-audio/${encodeURIComponent(videoId)}`, local: true });
   }
 
-  // Pre-warm the cache so the first /api/stream/:id request is fast
   try {
-    await getYtStreamUrl(videoId);
-    // Return a same-origin proxy URL — client just plays /api/stream/:id
-    res.json({ success: true, url: `/api/stream/${encodeURIComponent(videoId)}` });
+    const result = await getYtStreamUrl(videoId);
+    if (!result) return res.status(500).json({ success: false, error: "Stream URL extraction failed" });
+    // Return both relative proxy URL (for web/desktop) and raw directUrl (for native Android MediaPlayer)
+    res.json({
+      success: true,
+      url: `/api/stream/${encodeURIComponent(videoId)}`,
+      directUrl: result.url
+    });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || "Stream URL extraction failed" });
+    res.status(500).json({ success: false, error: err.message || "Unknown error" });
   }
 });
 
