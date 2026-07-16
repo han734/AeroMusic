@@ -14,7 +14,7 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=bundle --external:vite --outfile=dist-server/server.cjs",
     "bundle-server": "esbuild server.ts --bundle --platform=node --format=cjs --packages=bundle --external:vite --outfile=dist-server/server.cjs",
-    "electron:build": "npm run build && electron-builder build --win nsis && powershell -Command \"if (-not (Test-Path 'release')) { New-Item -ItemType Directory -Path 'release' | Out-Null }; Copy-Item 'dist-desktop/AeroMusicInstaller.exe' 'release/AeroMusicInstaller.exe' -Force; Remove-Item 'dist-desktop' -Recurse -Force\"",
+    "electron:build": "npm run build && electron-builder build --win nsis && powershell -Command \"if (-not (Test-Path 'release/windows')) { New-Item -ItemType Directory -Path 'release/windows' -Force | Out-Null }; Copy-Item 'dist-desktop/AeroMusicInstaller.exe' 'release/windows/AeroMusicInstaller.exe' -Force; Remove-Item 'dist-desktop' -Recurse -Force\"",
     "electron:admin": "electron-builder build --config electron-builder-admin.json --win",
     "start": "node dist-server/server.cjs",
     "clean": "rm -rf dist dist-server dist-desktop server.js",

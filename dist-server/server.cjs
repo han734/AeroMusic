@@ -64538,6 +64538,33 @@ async function getPipedStreamUrl(videoId) {
   }
   return null;
 }
+async function getInvidiousStreamUrl(videoId) {
+  const instances = [
+    "https://yewtu.be",
+    "https://invidious.privacydev.net",
+    "https://invidious.lunar.icu",
+    "https://invidious.projectsegfau.lt",
+    "https://invidious.slipfox.xyz"
+  ];
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.adaptiveFormats && data.adaptiveFormats.length > 0) {
+        const audioStreams = data.adaptiveFormats.filter((f) => f.mimeType && f.mimeType.startsWith("audio/"));
+        if (audioStreams.length > 0) {
+          const url = audioStreams[0].url;
+          const mimeType = audioStreams[0].mimeType?.split(";")[0] || "audio/mp4";
+          return { url, mimeType };
+        }
+      }
+    } catch (e) {
+      console.warn(`[stream-url] Invidious API fail for ${instance}:`, e.message);
+    }
+  }
+  return null;
+}
 async function getYtStreamUrl(videoId) {
   const cached = streamUrlCache.get(videoId);
   if (cached && cached.expiresAt > Date.now() + 6e4) {
@@ -64563,6 +64590,13 @@ async function getYtStreamUrl(videoId) {
       const expiresAt = Date.now() + 2 * 36e5;
       streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
       return piped;
+    }
+    const invidious = await getInvidiousStreamUrl(videoId);
+    if (invidious) {
+      console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API fallback`);
+      const expiresAt = Date.now() + 2 * 36e5;
+      streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
+      return invidious;
     }
     return null;
   }

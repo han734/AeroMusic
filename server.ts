@@ -75,7 +75,8 @@ try {
   console.warn("Failed to initialize writableDataDir or migrate legacy databases:", e);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Enable CORS for mobile webview support
 app.use((req, res, next) => {
