@@ -64512,6 +64512,32 @@ function downloadTrackForOfflineCache(track) {
   });
 }
 var streamUrlCache = /* @__PURE__ */ new Map();
+async function getPipedStreamUrl(videoId) {
+  const instances = [
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.owo.si",
+    "https://api.piped.private.coffee",
+    "https://pipedapi.ducks.party",
+    "https://pipedapi.drgns.space",
+    "https://pipedapi.darkness.services"
+  ];
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/streams/${videoId}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.audioStreams && data.audioStreams.length > 0) {
+        const stream = data.audioStreams[0];
+        const url = stream.url;
+        const mimeType = stream.mimeType || "audio/mp4";
+        return { url, mimeType };
+      }
+    } catch (e) {
+      console.warn(`[stream-url] Piped API fail for ${instance}:`, e.message);
+    }
+  }
+  return null;
+}
 async function getYtStreamUrl(videoId) {
   const cached = streamUrlCache.get(videoId);
   if (cached && cached.expiresAt > Date.now() + 6e4) {
@@ -64531,6 +64557,13 @@ async function getYtStreamUrl(videoId) {
     return { url: format.url, mimeType };
   } catch (err) {
     console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
+    const piped = await getPipedStreamUrl(videoId);
+    if (piped) {
+      console.log(`[stream-url] Resolved ${videoId} successfully via Piped API fallback`);
+      const expiresAt = Date.now() + 2 * 36e5;
+      streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
+      return piped;
+    }
     return null;
   }
 }
@@ -64542,10 +64575,15 @@ app.get("/api/stream-url", async (req, res) => {
     return res.json({ success: true, url: `/api/offline-audio/${encodeURIComponent(videoId)}`, local: true });
   }
   try {
-    await getYtStreamUrl(videoId);
-    res.json({ success: true, url: `/api/stream/${encodeURIComponent(videoId)}` });
+    const result = await getYtStreamUrl(videoId);
+    if (!result) return res.status(500).json({ success: false, error: "Stream URL extraction failed" });
+    res.json({
+      success: true,
+      url: `/api/stream/${encodeURIComponent(videoId)}`,
+      directUrl: result.url
+    });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message || "Stream URL extraction failed" });
+    res.status(500).json({ success: false, error: err.message || "Unknown error" });
   }
 });
 app.get("/api/stream/:id", async (req, res) => {
