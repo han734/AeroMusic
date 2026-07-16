@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Sliders, Volume2, Download, Zap, Radio, Layers, Check, RefreshCw, Link2 } from "lucide-react";
+import { Sliders, Volume2, Download, Zap, Radio, Layers, Check, RefreshCw, Link2, Sun, Moon } from "lucide-react";
 import { getApiBaseUrl, saveApiBaseUrl } from "../lib/api";
 import AuthPanel from "./AuthPanel";
 
@@ -7,6 +7,8 @@ interface SettingsPanelProps {
   currentUser: { username: string; avatar: string } | null;
   onLoginSuccess: (user: { username: string; avatar: string }) => void;
   onLogout: () => void;
+  theme: string;
+  onThemeChange: (theme: string) => void;
 }
 
 interface EQSliders {
@@ -26,7 +28,7 @@ const PRESETS: Record<string, EQSliders> = {
   vocal: { hz60: -3, hz230: -1, hz910: 4, hz4k: 5, hz14k: 2 }
 };
 
-export default function SettingsPanel({ currentUser, onLoginSuccess, onLogout }: SettingsPanelProps) {
+export default function SettingsPanel({ currentUser, onLoginSuccess, onLogout, theme, onThemeChange }: SettingsPanelProps) {
   const [eqEnabled, setEqEnabled] = useState<boolean>(true);
   const [eqPreset, setEqPreset] = useState<string>("flat");
   const [sliders, setSliders] = useState<EQSliders>({
@@ -410,6 +412,43 @@ export default function SettingsPanel({ currentUser, onLoginSuccess, onLogout }:
         </div>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
+          <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm shadow-xl">
+            <div className="flex items-center gap-3 pb-3 mb-4 border-b border-zinc-800/50">
+              <div className="p-2 bg-violet-500/10 rounded-lg text-violet-400">
+                {theme === "light" ? <Sun size={18} /> : <Moon size={18} />}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">App Interface Theme</h3>
+                <p className="text-[11px] text-zinc-400 mt-0.5">Toggle between dark and light interface modes.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => onThemeChange("dark")}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border transition-all cursor-pointer font-bold text-xs ${
+                  theme === "dark"
+                    ? "bg-violet-500/10 border-violet-500/50 text-white font-extrabold"
+                    : "bg-zinc-950/40 border-zinc-850 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                <Moon size={14} />
+                <span>Dark Mode</span>
+              </button>
+              <button
+                onClick={() => onThemeChange("light")}
+                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border transition-all cursor-pointer font-bold text-xs ${
+                  theme === "light"
+                    ? "bg-violet-500/10 border-violet-500/50 text-white font-extrabold"
+                    : "bg-zinc-950/40 border-zinc-850 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                <Sun size={14} />
+                <span>Light Mode</span>
+              </button>
+            </div>
+          </div>
+
           <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm shadow-xl">
             <div className="flex items-center gap-3 pb-3 mb-4 border-b border-zinc-800/50">
               <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">

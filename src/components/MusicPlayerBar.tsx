@@ -177,31 +177,38 @@ export default function MusicPlayerBar({
         </div>
       </div>
 
-      <div className="mt-3 relative group py-2 flex items-center">
-        <input
-          type="range"
-          min={0}
-          max={duration || 100}
-          value={progress}
-          onChange={(e) => onSeek(Number(e.target.value))}
-          disabled={!currentTrack}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
-        />
-        <div className="w-full h-1.5 bg-zinc-700 rounded-full relative overflow-hidden">
+      <div className="mt-3 flex items-center gap-3 w-full">
+        <span className="text-[11px] font-mono text-zinc-500 w-10 text-right select-none">
+          {formatTime(progress)}
+        </span>
+        <div className="flex-1 min-w-0 relative group py-2 flex items-center">
+          <input
+            type="range"
+            min={0}
+            max={duration || 100}
+            value={progress}
+            onChange={(e) => onSeek(Number(e.target.value))}
+            disabled={!currentTrack}
+            className="absolute inset-0 w-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
+          />
+          <div className="w-full h-1.5 bg-zinc-700 rounded-full relative overflow-hidden">
+            <div
+              className="absolute left-0 top-0 bottom-0 bg-violet-500 group-hover:bg-violet-400 rounded-full"
+              style={{ width: `${percentProgress}%` }}
+            />
+          </div>
           <div
-            className="absolute left-0 top-0 bottom-0 bg-violet-500 group-hover:bg-violet-400 rounded-full"
-            style={{ width: `${percentProgress}%` }}
+            className="absolute w-3 h-3 bg-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition shadow -translate-x-1/2 pointer-events-none"
+            style={{ left: `${percentProgress}%` }}
           />
         </div>
-        <div
-          className="absolute w-3 h-3 bg-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition shadow -translate-x-1/2 pointer-events-none"
-          style={{ left: `${percentProgress}%` }}
-        />
+        <span className="text-[11px] font-mono text-zinc-500 w-10 text-left select-none">
+          {formatTime(duration)}
+        </span>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
         <span>{currentTrack ? currentTrack.title : "No song"}</span>
-        <span>{formatTime(progress)} / {formatTime(duration)}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-2 flex-wrap justify-between">

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
+import { aeroFetch, getApiBaseUrl } from "../lib/api";
+import { registerPlugin } from "@capacitor/core";
 
 interface YoutubeStreamPlayerProps {
   videoId: string;
@@ -12,6 +14,9 @@ interface YoutubeStreamPlayerProps {
   showVideo: boolean;
   onCloseVideo?: () => void;
   offlineAudioUrl?: string | null;
+  trackTitle?: string;
+  trackArtist?: string;
+  trackArtwork?: string;
 }
 
 declare global {
@@ -20,6 +25,9 @@ declare global {
     YT?: any;
   }
 }
+
+const MediaNotification = registerPlugin<any>("MediaNotification");
+const isCapacitor = typeof window !== "undefined" && !!(window as any).Capacitor;
 
 export default function YoutubeStreamPlayer({
   videoId,
@@ -32,12 +40,24 @@ export default function YoutubeStreamPlayer({
   showVideo,
   onCloseVideo,
   offlineAudioUrl,
+  trackTitle,
+  trackArtist,
+  trackArtwork,
 }: YoutubeStreamPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [apiReady, setApiReady] = useState(false);
+
+  // Stream URL fetched from backend (/api/stream-url) for non-downloaded tracks
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamLoading, setStreamLoading] = useState(false);
+
+  // Effective audio URL: prefer locally-downloaded file, then live stream
+  // When this is set the component uses <audio> instead of the YouTube IFrame,
+  // which means background playback works natively on Android.
+  const effectiveAudioUrl = offlineAudioUrl || streamUrl;
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
@@ -76,6 +96,8 @@ export default function YoutubeStreamPlayer({
   const onSongFinishedRef = useRef(onSongFinished);
   const onProgressRef = useRef(onProgress);
   const onReadyRef = useRef(onReady);
+  // Keep a ref so the YouTube event handler always sees the latest isPlaying value
+  const isPlayingRef = useRef(isPlaying);
 
   useEffect(() => {
     onSongFinishedRef.current = onSongFinished;
@@ -89,9 +111,97 @@ export default function YoutubeStreamPlayer({
     onReadyRef.current = onReady;
   }, [onReady]);
 
-  // Initialize YouTube IFrame API
   useEffect(() => {
-    if (offlineAudioUrl) return;
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  const resolvedAudioUrl = effectiveAudioUrl
+    ? (effectiveAudioUrl.startsWith("http") ? effectiveAudioUrl : `${getApiBaseUrl() || ""}${effectiveAudioUrl}`)
+    : "";
+
+  // ---------------------------------------------------------------------------
+  // Android/Capacitor Native Playback Path
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!isCapacitor) return;
+    if (!resolvedAudioUrl) return;
+
+    const seekToMs = seekToTime !== null && seekToTime !== undefined ? Math.round(seekToTime * 1000) : -1;
+
+    MediaNotification.update({
+      title: trackTitle || "AeroMusic",
+      artist: trackArtist || "",
+      album: "AeroMusic Premium",
+      artwork: trackArtwork || "",
+      isPlaying: isPlaying,
+      url: resolvedAudioUrl,
+      seekTo: seekToMs
+    }).catch((e: any) => console.error("Native MediaNotification update failed:", e));
+  }, [resolvedAudioUrl, isPlaying, seekToTime, trackTitle, trackArtist, trackArtwork]);
+
+  useEffect(() => {
+    if (!isCapacitor) return;
+
+    const subTime = MediaNotification.addListener("timeUpdate", (data: any) => {
+      if (onProgressRef.current) {
+        onProgressRef.current(data.currentTime, data.duration);
+      }
+    });
+
+    const subAction = MediaNotification.addListener("mediaAction", (data: any) => {
+      if (data.action === "ended" && onSongFinishedRef.current) {
+        onSongFinishedRef.current();
+      } else if (data.action === "prepared" && onReadyRef.current) {
+        onReadyRef.current();
+      }
+    });
+
+    return () => {
+      try { subTime.remove(); } catch (_) {}
+      try { subAction.remove(); } catch (_) {}
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Auto-fetch direct stream URL from backend when videoId changes.
+  // yt-dlp on the server extracts the raw googlevideo.com audio URL.
+  // Playing it via <audio> bypasses all YouTube IFrame background-pause logic.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (offlineAudioUrl) return; // offline file takes priority
+    if (!videoId) return;
+
+    setStreamUrl(null);
+    setStreamLoading(true);
+
+    const controller = new AbortController();
+
+    aeroFetch(`/api/stream-url?id=${encodeURIComponent(videoId)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.url) {
+          setStreamUrl(data.url);
+        } else {
+          console.warn("[AeroMusic] stream-url failed, falling back to YouTube IFrame");
+        }
+        setStreamLoading(false);
+      })
+      .catch(err => {
+        if (err.name !== "AbortError") {
+          console.warn("[AeroMusic] stream-url fetch error:", err);
+        }
+        setStreamLoading(false);
+      });
+
+    return () => {
+      controller.abort();
+      setStreamUrl(null);
+    };
+  }, [videoId, offlineAudioUrl]);
+
+  // Initialize YouTube IFrame API (only used as fallback when stream URL is unavailable)
+  useEffect(() => {
+    if (effectiveAudioUrl) return; // use native <audio> path instead
 
     if (window.YT) {
       setApiReady(true);
@@ -117,18 +227,14 @@ export default function YoutubeStreamPlayer({
     return () => {
       // Keep script, but reset global callback if needed
     };
-  }, [offlineAudioUrl]);
+  }, [effectiveAudioUrl]);
 
-  // Initialize Player once API is ready and videoId changes
+  // Initialize Player (YouTube IFrame fallback only)
   useEffect(() => {
-    if (offlineAudioUrl) {
-      // Pause any active YouTube video if switching to offline mode
+    if (effectiveAudioUrl) {
+      // Pause any active YouTube iframe when switching to native audio
       if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
-        try {
-          playerRef.current.pauseVideo();
-        } catch (e) {
-          console.warn("Error pausing YouTube player on offline transition:", e);
-        }
+        try { playerRef.current.pauseVideo(); } catch (e) {}
       }
       return;
     }
@@ -189,9 +295,17 @@ export default function YoutubeStreamPlayer({
             if (onReadyRef.current) onReadyRef.current();
           },
           onStateChange: (event: any) => {
-            // YT.PlayerState.ENDED is 0
+            // YT.PlayerState values: ENDED=0, PLAYING=1, PAUSED=2, BUFFERING=3
             if (event.data === 0) {
+              // Track ended — advance to next
               if (onSongFinishedRef.current) onSongFinishedRef.current();
+            } else if (event.data === 2 && isPlayingRef.current) {
+              // YouTube paused while we're supposed to be playing.
+              // This happens when Android fires visibilitychange→hidden in background.
+              // Immediately resume playback as our final safety net.
+              setTimeout(() => {
+                try { event.target.playVideo(); } catch (_) {}
+              }, 200);
             }
           },
           onError: (event: any) => {
@@ -215,26 +329,28 @@ export default function YoutubeStreamPlayer({
     };
   }, [apiReady, videoId, offlineAudioUrl]);
 
-  // Offline audio path
+  // Native audio path — used for BOTH offline files AND live stream URLs
   useEffect(() => {
-    if (!offlineAudioUrl || !audioRef.current) return;
+    if (isCapacitor) return; // Skip if on Android/Capacitor (handled by native service)
+    if (!resolvedAudioUrl || !audioRef.current) return;
 
     const audio = audioRef.current;
+    const isLocalFile = !resolvedAudioUrl.startsWith("http") || resolvedAudioUrl.includes("localhost") || resolvedAudioUrl.includes("127.0.0.1") || resolvedAudioUrl.includes("192.168."); // local/offline support crossOrigin/EQ
 
-    // Set up Audio Context and EQ nodes once offline media is ready
-    if (!audioContextRef.current) {
+    // Set up AudioContext + EQ only for local offline files (requires crossOrigin)
+    if (!audioContextRef.current && isLocalFile) {
       try {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContextClass) {
           const ctx = new AudioContextClass();
           audioContextRef.current = ctx;
-          
+
           audio.crossOrigin = "anonymous";
           const source = ctx.createMediaElementSource(audio);
-          
+
           const frequencies = [60, 230, 910, 4000, 14000];
           let lastNode: AudioNode = source;
-          
+
           const filters = frequencies.map((freq, idx) => {
             const filter = ctx.createBiquadFilter();
             filter.type = idx === 0 ? "lowshelf" : idx === 4 ? "highshelf" : "peaking";
@@ -245,11 +361,9 @@ export default function YoutubeStreamPlayer({
             lastNode = filter;
             return filter;
           });
-          
+
           lastNode.connect(ctx.destination);
           filtersRef.current = filters;
-          
-          // Apply initial filters
           updateEQFilters();
         }
       } catch (err) {
@@ -257,7 +371,7 @@ export default function YoutubeStreamPlayer({
       }
     }
 
-    audio.src = offlineAudioUrl;
+    audio.src = resolvedAudioUrl;
     audio.load();
 
     const onLoaded = () => {
@@ -281,10 +395,12 @@ export default function YoutubeStreamPlayer({
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("ended", onEnded);
     };
-  }, [offlineAudioUrl]);
+  }, [resolvedAudioUrl]);
 
+  // Play / pause / volume control for native audio
   useEffect(() => {
-    if (!offlineAudioUrl || !audioRef.current) return;
+    if (isCapacitor) return; // Skip if on Android/Capacitor
+    if (!resolvedAudioUrl || !audioRef.current) return;
 
     const audio = audioRef.current;
     audio.volume = volume / 100;
@@ -293,10 +409,12 @@ export default function YoutubeStreamPlayer({
     } else {
       audio.pause();
     }
-  }, [offlineAudioUrl, isPlaying, volume]);
+  }, [resolvedAudioUrl, isPlaying, volume]);
 
+  // Seek for native audio
   useEffect(() => {
-    if (!offlineAudioUrl || !audioRef.current) return;
+    if (isCapacitor) return; // Skip if on Android/Capacitor
+    if (!resolvedAudioUrl || !audioRef.current) return;
 
     const audio = audioRef.current;
     if (seekToTime === null || seekToTime === undefined) return;
@@ -304,11 +422,11 @@ export default function YoutubeStreamPlayer({
     if (isPlaying) {
       audio.play().catch(() => undefined);
     }
-  }, [offlineAudioUrl, seekToTime, isPlaying]);
+  }, [resolvedAudioUrl, seekToTime, isPlaying]);
 
-  // Sync Pause/Play states
+  // Sync Pause/Play states (YouTube IFrame fallback only)
   useEffect(() => {
-    if (offlineAudioUrl) return;
+    if (effectiveAudioUrl) return; // handled by native audio above
     if (!playerRef.current || !playerRef.current.getPlayerState) return;
     try {
       const state = playerRef.current.getPlayerState();
@@ -320,22 +438,22 @@ export default function YoutubeStreamPlayer({
     } catch (e) {
       console.warn("Player sync error:", e);
     }
-  }, [isPlaying, offlineAudioUrl]);
+  }, [isPlaying, effectiveAudioUrl]);
 
-  // Sync Volume states
+  // Sync Volume states (YouTube IFrame fallback only)
   useEffect(() => {
-    if (offlineAudioUrl) return;
+    if (effectiveAudioUrl) return;
     if (!playerRef.current || typeof playerRef.current.setVolume !== "function") return;
     try {
       playerRef.current.setVolume(volume);
     } catch (e) {
       console.warn("Volume sync error:", e);
     }
-  }, [volume, offlineAudioUrl]);
+  }, [volume, effectiveAudioUrl]);
 
-  // Sync Seek states
+  // Sync Seek states (YouTube IFrame fallback only)
   useEffect(() => {
-    if (offlineAudioUrl) return;
+    if (effectiveAudioUrl) return;
     if (seekToTime === null || seekToTime === undefined || !playerRef.current) return;
     try {
       playerRef.current.seekTo(seekToTime, true);
@@ -345,11 +463,11 @@ export default function YoutubeStreamPlayer({
     } catch (e) {
       console.warn("Seek error:", e);
     }
-  }, [seekToTime, isPlaying, offlineAudioUrl]);
+  }, [seekToTime, isPlaying, effectiveAudioUrl]);
 
-  // Handle progress interval polling
+  // Progress polling (YouTube IFrame fallback only — <audio> uses timeupdate event)
   useEffect(() => {
-    if (offlineAudioUrl) return;
+    if (effectiveAudioUrl) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
 
     intervalRef.current = setInterval(() => {
@@ -368,7 +486,7 @@ export default function YoutubeStreamPlayer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [videoId, offlineAudioUrl]);
+  }, [videoId, effectiveAudioUrl]);
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);

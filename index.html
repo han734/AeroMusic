@@ -9,8 +9,56 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.json" />
     <title>AeroMusic Premium</title>
+    <!-- 
+      CRITICAL: Override Page Visibility API BEFORE anything else loads.
+      Without this, Android's WebView fires visibilitychange→hidden when the app
+      goes to background, which causes YouTube IFrame to auto-pause.
+      This overrides it so all frames (including YouTube iframes) always see "visible".
+    -->
+    <script>
+      (function() {
+        try {
+          // Lock visibilityState to 'visible' forever
+          Object.defineProperty(document, 'visibilityState', {
+            get: function() { return 'visible'; },
+            configurable: true
+          });
+          Object.defineProperty(document, 'hidden', {
+            get: function() { return false; },
+            configurable: true
+          });
+          // Suppress visibilitychange events that claim page is hidden
+          var _docAEL = document.addEventListener.bind(document);
+          document.addEventListener = function(type, fn, opts) {
+            if (type === 'visibilitychange') {
+              return _docAEL(type, function(e) {
+                // Only forward if visibility is still 'visible' (it won't be, so this blocks it)
+                if (!document.hidden) fn(e);
+              }, opts);
+            }
+            return _docAEL(type, fn, opts);
+          };
+        } catch(e) {}
+      })();
+    </script>
+    <script>
+      (function() {
+        try {
+          const theme = localStorage.getItem("aero-theme") || "dark";
+          if (theme === "light") {
+            document.documentElement.classList.add("light");
+            document.documentElement.classList.remove("dark");
+          } else {
+            document.documentElement.classList.add("dark");
+            document.documentElement.classList.remove("light");
+          }
+        } catch (e) {
+          console.warn("Theme initialisation failed:", e);
+        }
+      })();
+    </script>
   </head>
-  <body class="bg-black select-none overscroll-none">
+  <body class="bg-zinc-950 select-none overscroll-none">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

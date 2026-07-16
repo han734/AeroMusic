@@ -148,7 +148,7 @@ export default function UserProfileView({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-12 text-zinc-400 bg-[#121212] select-none">
+      <div className="flex-1 flex flex-col items-center justify-center p-12 text-zinc-400 bg-zinc-900 select-none">
         <Loader2 className="animate-spin text-violet-400 mb-3" size={32} />
         <p className="text-sm font-semibold">Loading profile information...</p>
       </div>
@@ -157,7 +157,7 @@ export default function UserProfileView({
 
   if (error || !profile) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-zinc-450 bg-[#121212] select-none">
+      <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-zinc-450 bg-zinc-900 select-none">
         <h3 className="text-xl font-bold text-white mb-2">Profile Unavailable</h3>
         <p className="text-sm max-w-sm mb-6">{error || "User profile details could not be resolved."}</p>
         <button
@@ -171,7 +171,7 @@ export default function UserProfileView({
   }
 
   return (
-    <div id="user-profile-view" className="flex-1 overflow-y-auto bg-[#121212] text-zinc-100 custom-scrollbar font-sans relative pb-28">
+    <div id="user-profile-view" className="flex-1 overflow-y-auto bg-zinc-900 text-zinc-100 custom-scrollbar font-sans relative pb-28">
       
       {/* Dynamic blurred backdrop background glow */}
       <div className="absolute top-0 left-0 right-0 h-[360px] overflow-hidden pointer-events-none opacity-[0.18] filter blur-[100px] transition-all duration-1000 z-0">

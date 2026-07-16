@@ -832,7 +832,7 @@ export default function HomeDashboard({
   };
 
   return (
-    <div id="home-dashboard" className="flex-1 overflow-y-auto p-6 text-white bg-[#121212] select-none relative custom-scrollbar animate-fade-in">
+    <div id="home-dashboard" className="flex-1 overflow-y-auto p-6 text-white bg-zinc-900 select-none relative custom-scrollbar animate-fade-in">
       
       {/* Immersive Dynamic Backdrop Glow (Apple Music Style) */}
       {currentTrack && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { registerPlugin } from "@capacitor/core";
 import Sidebar from "./components/Sidebar";
 import MobileNav from "./components/MobileNav";
 import HomeDashboard from "./components/HomeDashboard";
@@ -19,6 +20,13 @@ import GlobalHeader from "./components/GlobalHeader";
 import UserProfileView from "./components/UserProfileView";
 import { Track, Playlist, UserProfile } from "./types";
 import { aeroFetch, getWebSocketUrl, getApiBaseUrl } from "./lib/api";
+
+// Native Android media notification plugin (no-op on web/desktop)
+const MediaNotification = registerPlugin<{
+  update(opts: { title: string; artist: string; album: string; artwork: string; isPlaying: boolean }): Promise<void>;
+  dismiss(): Promise<void>;
+  addListener(event: "mediaAction", handler: (data: { action: string }) => void): any;
+}>("MediaNotification");
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>("home");
@@ -130,6 +138,26 @@ export default function App() {
     likedTracks: []
   }), []);
   const [selectedProfileUsername, setSelectedProfileUsername] = useState<string | null>(null);
+  
+  const [theme, setTheme] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("aero-theme") || "dark";
+    }
+    return "dark";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "light") {
+      root.classList.add("light");
+      root.classList.remove("dark");
+    } else {
+      root.classList.add("dark");
+      root.classList.remove("light");
+    }
+    localStorage.setItem("aero-theme", theme);
+  }, [theme]);
+
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
     setPlaylists([]);
@@ -140,6 +168,73 @@ export default function App() {
     localStorage.removeItem("aero-cached-profile");
     setIsOfflineMode(false);
   }, []);
+
+  const handleLoginSuccess = useCallback((user: UserProfile) => {
+    setCurrentUser(user);
+    localStorage.setItem("aero-listening-username", user.username);
+    localStorage.setItem("aero-listening-avatar", user.avatar || "🎵");
+    
+    // Merge local playlists with server user playlists
+    let mergedPlaylists = [...(user.playlists || [])];
+    const localPlaylistsRaw = localStorage.getItem("premium-custom-playlists");
+    if (localPlaylistsRaw) {
+      try {
+        const localPlaylists = JSON.parse(localPlaylistsRaw);
+        if (Array.isArray(localPlaylists)) {
+          localPlaylists.forEach((lp) => {
+            if (lp && lp.id && !mergedPlaylists.some((p) => p.id === lp.id)) {
+              mergedPlaylists.push(lp);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to merge local playlists:", e);
+      }
+    }
+    setPlaylists(mergedPlaylists);
+    localStorage.setItem("premium-custom-playlists", JSON.stringify(mergedPlaylists));
+
+    // Merge local liked tracks with server user liked tracks
+    let mergedLiked = [...(user.likedTracks || [])];
+    const localLikedRaw = localStorage.getItem("premium-liked-tracks");
+    if (localLikedRaw) {
+      try {
+        const localLiked = JSON.parse(localLikedRaw);
+        if (Array.isArray(localLiked)) {
+          localLiked.forEach((lt) => {
+            if (lt && lt.id && !mergedLiked.some((t) => t.id === lt.id)) {
+              mergedLiked.push(lt);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to merge local liked tracks:", e);
+      }
+    }
+    setLikedTracks(mergedLiked);
+    localStorage.setItem("premium-liked-tracks", JSON.stringify(mergedLiked));
+
+    // Cache merged profile
+    const mergedProfile = { ...user, playlists: mergedPlaylists, likedTracks: mergedLiked };
+    localStorage.setItem("aero-cached-profile", JSON.stringify(mergedProfile));
+
+    // Sync back to server
+    const token = localStorage.getItem("aero-session-token");
+    if (token) {
+      aeroFetch("/api/auth/update-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          playlists: mergedPlaylists,
+          likedTracks: mergedLiked
+        })
+      }).catch(err => console.warn("Failed to sync merged library on login success:", err));
+    }
+  }, []);
+
   const [isRestoringSession, setIsRestoringSession] = useState<boolean>(() => {
     return typeof window !== "undefined" && !!localStorage.getItem("aero-session-token");
   });
@@ -165,6 +260,7 @@ export default function App() {
   const socketRef = useRef<WebSocket | null>(null);
   const isRemoteUpdateRef = useRef<boolean>(false);
   const progressRef = useRef<number>(0);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const isHost = !activeRoomId || (roomMembers.length > 0 && roomMembers[0].id === myClientId);
 
@@ -856,38 +952,11 @@ export default function App() {
 
   // Initialize Android background audio playback service (if running in Capacitor Cordova mode)
   useEffect(() => {
-    const initBackgroundMode = () => {
-      const win = window as any;
-      if (typeof window !== "undefined" && win.cordova?.plugins?.backgroundMode) {
-        const bgMode = win.cordova.plugins.backgroundMode;
-        try {
-          // Enable background mode execution
-          bgMode.enable();
-          
-          // Prevent back button from killing/terminating the app when backgrounded
-          bgMode.overrideBackButton();
-          
-          // Configure background notification text and properties
-          bgMode.setDefaults({
-            title: "AeroMusic Streamer",
-            text: "Playing music smoothly in the background.",
-            icon: "icon", // uses the native app launcher icon
-            color: "6b21a8", // dark violet header hex
-            resume: true,
-            hidden: false
-          });
-
-          console.log("Capacitor Android Background Playback Service initialized successfully.");
-        } catch (err) {
-          console.warn("Failed to configure background mode:", err);
-        }
-      }
-    };
-    
-    // Slight delay to ensure Cordova plugins are fully loaded on Webview ready
-    const timer = setTimeout(initBackgroundMode, 1000);
-    return () => clearTimeout(timer);
+    // Background mode is now handled entirely by the native MediaNotificationService.
+    // No Cordova plugin init needed here.
   }, []);
+
+
 
   // Reset video override when track changes
   useEffect(() => {
@@ -1039,6 +1108,19 @@ export default function App() {
     progressRef.current = current;
     setDuration(total);
     setSeekToTime(null); // Reset seek trigger once applied
+
+    // Sync position state with the OS Media Session
+    if (typeof window !== "undefined" && "mediaSession" in navigator && navigator.mediaSession.setPositionState && total > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: total,
+          playbackRate: 1.0,
+          position: Math.min(Math.max(0, current), total)
+        });
+      } catch (err) {
+        console.warn("Failed to set MediaSession position state:", err);
+      }
+    }
   }, []);
 
   const handleSeek = (seconds: number) => {
@@ -1050,7 +1132,90 @@ export default function App() {
       handleBroadcastPlayback(currentTrack, isPlaying, seconds);
     }
     isRemoteUpdateRef.current = false;
+
+    // Sync position state immediately with OS Media Session on user seek
+    if (typeof window !== "undefined" && "mediaSession" in navigator && navigator.mediaSession.setPositionState && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: duration,
+          playbackRate: 1.0,
+          position: Math.min(Math.max(0, seconds), duration)
+        });
+      } catch (err) {
+        console.warn("Failed to set MediaSession position state on seek:", err);
+      }
+    }
   };
+
+  // Update HTML5 Media Session in sync for desktop / PWA fallback
+  useEffect(() => {
+    if (!currentTrack) {
+      MediaNotification.dismiss().catch(() => {});
+      return;
+    }
+
+    if (typeof window !== "undefined" && "mediaSession" in navigator) {
+      try {
+        if (typeof MediaMetadata !== "undefined") {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title:  currentTrack.title,
+            artist: currentTrack.artist,
+            album:  currentTrack.album || "AeroMusic Premium",
+            artwork: [
+              { src: currentTrack.thumbnail, sizes: "512x512", type: "image/png" },
+            ],
+          });
+        }
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+      } catch (_) {}
+    }
+  }, [isPlaying, currentTrack]);
+
+  // Register native notification button callbacks + HTML5 Media Session handlers.
+  // IMPORTANT: the listener is registered ONCE (empty deps) to avoid thrashing.
+  // All actual handlers are stored in a ref so they always see the latest state.
+  const mediaActionHandlerRef = useRef<((data: { action: string }) => void) | null>(null);
+
+  useEffect(() => {
+    mediaActionHandlerRef.current = (data) => {
+      if (data.action === "play")  { setIsPlaying(true);  if (activeRoomId && isHost) handleBroadcastPlayback(currentTrack, true,  progressRef.current); }
+      if (data.action === "pause") { setIsPlaying(false); if (activeRoomId && isHost) handleBroadcastPlayback(currentTrack, false, progressRef.current); }
+      if (data.action === "next")  handleNext();
+      if (data.action === "prev")  handlePrevious();
+    };
+  }, [handlePrevious, handleNext, currentTrack, activeRoomId, isHost, handleBroadcastPlayback]);
+
+  useEffect(() => {
+    // Register the native listener ONCE — delegate to the ref for the actual logic
+    const sub = MediaNotification.addListener("mediaAction", (data) => {
+      mediaActionHandlerRef.current?.(data);
+    });
+
+    // HTML5 Media Session action handlers (desktop / PWA fallback)
+    if (typeof window !== "undefined" && "mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler("play",          () => mediaActionHandlerRef.current?.({ action: "play" }));
+        navigator.mediaSession.setActionHandler("pause",         () => mediaActionHandlerRef.current?.({ action: "pause" }));
+        navigator.mediaSession.setActionHandler("previoustrack", () => mediaActionHandlerRef.current?.({ action: "prev" }));
+        navigator.mediaSession.setActionHandler("nexttrack",     () => mediaActionHandlerRef.current?.({ action: "next" }));
+        navigator.mediaSession.setActionHandler("seekto",        (d) => { if (d.seekTime !== undefined) handleSeek(d.seekTime); });
+      } catch (_) {}
+    }
+
+    return () => {
+      try { sub?.remove?.(); } catch (_) {}
+      if (typeof window !== "undefined" && "mediaSession" in navigator) {
+        try {
+          navigator.mediaSession.setActionHandler("play",          null);
+          navigator.mediaSession.setActionHandler("pause",         null);
+          navigator.mediaSession.setActionHandler("previoustrack", null);
+          navigator.mediaSession.setActionHandler("nexttrack",     null);
+          navigator.mediaSession.setActionHandler("seekto",        null);
+        } catch (_) {}
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Register once only — handler logic lives in the ref above
 
   const handleClearQueue = useCallback(() => {
     if (currentTrack) {
@@ -1169,20 +1334,7 @@ export default function App() {
           <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-6 backdrop-blur-md shadow-2xl">
             <AuthPanel 
               currentUser={null}
-              onLoginSuccess={(user) => {
-                setCurrentUser(user);
-                localStorage.setItem("aero-listening-username", user.username);
-                localStorage.setItem("aero-listening-avatar", user.avatar);
-                localStorage.setItem("aero-cached-profile", JSON.stringify(user));
-                if (user.playlists) {
-                  setPlaylists(user.playlists);
-                  localStorage.setItem("premium-custom-playlists", JSON.stringify(user.playlists));
-                }
-                if (user.likedTracks) {
-                  setLikedTracks(user.likedTracks);
-                  localStorage.setItem("premium-liked-tracks", JSON.stringify(user.likedTracks));
-                }
-              }}
+              onLoginSuccess={handleLoginSuccess}
               onLogout={handleLogout}
               onContinueOffline={() => {
                 const cached = localStorage.getItem("aero-cached-profile");
@@ -1208,7 +1360,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#000000] flex flex-col overflow-hidden text-white font-sans selection:bg-violet-500/30 animate-fade-in">
+    <div className="h-screen w-screen bg-zinc-950 flex flex-col overflow-hidden text-white font-sans selection:bg-violet-500/30 animate-fade-in">
       
       {/* Full Body Dashboard (Sidebar + Active tab) */}
       <div className={`flex-1 flex min-h-0 overflow-hidden p-2 pb-0 gap-2 transition-all duration-500 ${
@@ -1360,12 +1512,10 @@ export default function App() {
           {activeTab === "settings" && (
             <SettingsPanel
               currentUser={currentUser}
-              onLoginSuccess={(user) => {
-                setCurrentUser(user);
-                if (user.playlists) setPlaylists(user.playlists);
-                if (user.likedTracks) setLikedTracks(user.likedTracks);
-              }}
+              onLoginSuccess={handleLoginSuccess}
               onLogout={handleLogout}
+              theme={theme}
+              onThemeChange={setTheme}
             />
           )}
 
@@ -1373,11 +1523,7 @@ export default function App() {
             <UserProfileView
               username={selectedProfileUsername}
               currentUser={currentUser}
-              onLoginSuccess={(user) => {
-                setCurrentUser(user);
-                if (user.playlists) setPlaylists(user.playlists);
-                if (user.likedTracks) setLikedTracks(user.likedTracks);
-              }}
+              onLoginSuccess={handleLoginSuccess}
               onTrackSelect={handleTrackSelect}
               onSelectPlaylist={handleSelectPlaylist}
               setActiveTab={setActiveTab}
@@ -1447,6 +1593,9 @@ export default function App() {
               showVideo={showVideo}
               onCloseVideo={() => setShowVideo(false)}
               offlineAudioUrl={currentTrack.offlineFile || null}
+              trackTitle={currentTrack.title}
+              trackArtist={currentTrack.artist}
+              trackArtwork={currentTrack.thumbnail || ""}
             />
           )}
         </main>

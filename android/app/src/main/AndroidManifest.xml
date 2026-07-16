@@ -27,6 +27,13 @@
 
         </activity>
 
+        <!-- Native media notification foreground service -->
+        <service
+            android:name=".MediaNotificationService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+
+        <!-- Legacy cordova background-mode service (kept for plugin compatibility) -->
         <service
             android:name="io.globules.cordova.plugin.ForegroundService"
             android:foregroundServiceType="mediaPlayback"
@@ -44,11 +51,12 @@
     </application>
 
     <!-- Permissions -->
-
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>
+

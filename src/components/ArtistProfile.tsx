@@ -66,7 +66,7 @@ export default function ArtistProfile({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121212] text-zinc-100 p-10">
+      <div className="flex-1 flex flex-col items-center justify-center bg-zinc-900 text-zinc-100 p-10">
         <Loader2 size={36} className="animate-spin text-violet-500 mb-3" />
         <p className="text-sm font-mono text-zinc-400">Loading Artist Profile...</p>
       </div>
@@ -75,7 +75,7 @@ export default function ArtistProfile({
 
   if (!profile) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121212] text-zinc-100 p-10">
+      <div className="flex-1 flex flex-col items-center justify-center bg-zinc-900 text-zinc-100 p-10">
         <p className="text-sm text-zinc-400">Could not resolve artist details.</p>
       </div>
     );
@@ -90,7 +90,7 @@ export default function ArtistProfile({
   const monthlyListeners = (Math.abs(hash) % 18000000 + 400000).toLocaleString();
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#121212] text-zinc-100 custom-scrollbar font-sans pb-28">
+    <div className="flex-1 overflow-y-auto bg-zinc-900 text-zinc-100 custom-scrollbar font-sans pb-28">
       {/* Immersive Artist Hero Banner */}
       <div className="relative h-64 md:h-80 bg-zinc-900 overflow-hidden flex items-end">
         {/* Cover image background blur */}

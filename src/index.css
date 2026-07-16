@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+:root {
+  --bg-body: #09090b;
+  --bg-panel: #121212;
+  --bg-header: #181818;
+  --border-color: #27272a;
+  --text-main: #ffffff;
+  --text-muted: #a1a1aa;
+  --text-inverse: #000000;
+}
+
+:root.light {
+  --bg-body: #f4f4f5;
+  --bg-panel: #ffffff;
+  --bg-header: #f4f4f5;
+  --border-color: #d4d4d8;
+  --text-main: #09090b;
+  --text-muted: #52525b;
+  --text-inverse: #ffffff;
+}
+
+@theme {
+  --color-zinc-950: var(--bg-body);
+  --color-zinc-900: var(--bg-panel);
+  --color-zinc-800: var(--bg-header);
+  --color-zinc-700: var(--border-color);
+  --color-zinc-400: var(--text-muted);
+  --color-white: var(--text-main);
+  --color-black: var(--text-inverse);
+}
+
 @layer utilities {
   /* Thin sleek scrollbars for Spotify feel */
   .custom-scrollbar::-webkit-scrollbar {

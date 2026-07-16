@@ -224,7 +224,7 @@ export default function SpotifyImporter({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#121212] text-zinc-100 p-6 md:p-10 custom-scrollbar font-sans relative">
+    <div className="flex-1 overflow-y-auto bg-zinc-900 text-zinc-100 p-6 md:p-10 custom-scrollbar font-sans relative">
       
       {/* Immersive Dynamic Backdrop Glow (Apple Music Style) */}
       {currentTrack && (

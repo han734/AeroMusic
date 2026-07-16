@@ -106,7 +106,7 @@ export default function SearchDashboard({
   };
 
   return (
-    <div id="search-dashboard" className="flex-1 overflow-y-auto p-6 text-white bg-[#121212] select-none relative custom-scrollbar">
+    <div id="search-dashboard" className="flex-1 overflow-y-auto p-6 text-white bg-zinc-900 select-none relative custom-scrollbar">
       
       {/* Immersive Dynamic Backdrop Glow (Apple Music Style) */}
       {currentTrack && (

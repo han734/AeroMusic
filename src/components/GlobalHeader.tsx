@@ -161,7 +161,7 @@ export default function GlobalHeader({
               />
 
               {/* Floating Dropdown Container */}
-              <div className="absolute right-0 mt-2.5 w-56 bg-[#181818] border border-zinc-800/80 rounded-xl py-1 shadow-2xl z-50 flex flex-col text-[13px] font-sans text-zinc-200 select-none animate-in fade-in slide-in-from-top-1 duration-150">
+              <div className="absolute right-0 mt-2.5 w-56 bg-zinc-800 border border-zinc-800/80 rounded-xl py-1 shadow-2xl z-50 flex flex-col text-[13px] font-sans text-zinc-200 select-none animate-in fade-in slide-in-from-top-1 duration-150">
                 
                 {/* Account */}
                 <button

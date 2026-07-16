@@ -23,7 +23,7 @@ export default function Sidebar({
   return (
     <aside
       id="spotify-sidebar"
-      className="hidden md:flex w-64 bg-[#121212] border border-zinc-900/60 rounded-2xl flex-col p-4 gap-4 h-full select-none text-zinc-400 font-sans shrink-0"
+      className="hidden md:flex w-64 bg-zinc-900 border border-zinc-900/60 rounded-2xl flex-col p-4 gap-4 h-full select-none text-zinc-400 font-sans shrink-0"
     >
       {/* Brand Logo */}
       <div className="flex items-center gap-3 px-2 py-3 cursor-pointer" onClick={() => setActiveTab("home")}>
@@ -32,7 +32,7 @@ export default function Sidebar({
         </div>
         <div>
           <h1 className="text-white font-extrabold text-lg tracking-tight">
-            Aero<span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-indigo-300">Music</span>
+            Aero<span className="text-violet-400">Music</span>
           </h1>
           <p className="text-[10px] text-zinc-400 font-mono font-bold tracking-wider uppercase">Premium Audio</p>
         </div>

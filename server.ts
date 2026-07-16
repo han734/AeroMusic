@@ -8,6 +8,7 @@ import { createServer as createHttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import crypto from "crypto";
 import { SpotifyApi } from "@spotify/web-api-ts-sdk";
+import ytdl from "@distube/ytdl-core";
 
 import { fileURLToPath } from 'url';
 const __filenameLoc = typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : '';
@@ -1493,6 +1494,101 @@ function downloadTrackForOfflineCache(track: any): Promise<{ success: boolean; o
   });
 }
 
+// ---------------------------------------------------------------------------
+// Direct audio stream URL extraction + proxy
+// Uses @distube/ytdl-core (pure Node.js, no binary needed).
+// The proxy endpoint (/api/stream/:id) pipes audio through our server so the
+// <audio> element fetches same-origin — no CORS issues at all.
+// ---------------------------------------------------------------------------
+
+const streamUrlCache = new Map<string, { url: string; mimeType: string; expiresAt: number }>();
+
+async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
+  const cached = streamUrlCache.get(videoId);
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return { url: cached.url, mimeType: cached.mimeType };
+  }
+
+  try {
+    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+    // Pick highest-quality audio-only format (prefer m4a then webm)
+    const format = ytdl.chooseFormat(info.formats, {
+      quality: "highestaudio",
+      filter: "audioonly",
+    });
+    if (!format || !format.url) throw new Error("No audio format found");
+
+    const expMatch = format.url.match(/[?&]expire=(\d+)/);
+    const expiresAt = expMatch ? parseInt(expMatch[1]) * 1000 : Date.now() + 4 * 3600_000;
+    const mimeType = format.mimeType?.split(";")[0] || "audio/mp4";
+
+    streamUrlCache.set(videoId, { url: format.url, mimeType, expiresAt });
+    return { url: format.url, mimeType };
+  } catch (err: any) {
+    console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
+    return null;
+  }
+}
+
+// Returns a same-origin proxy URL so the <audio> element never needs CORS
+app.get("/api/stream-url", async (req, res) => {
+  const videoId = (req.query.id as string || "").trim();
+  if (!videoId) return res.status(400).json({ success: false, error: "id required" });
+
+  // If the track is already downloaded locally, serve that directly
+  const localFile = findOfflineAudioFile(videoId);
+  if (localFile && fs.existsSync(localFile)) {
+    return res.json({ success: true, url: `/api/offline-audio/${encodeURIComponent(videoId)}`, local: true });
+  }
+
+  // Pre-warm the cache so the first /api/stream/:id request is fast
+  try {
+    await getYtStreamUrl(videoId);
+    // Return a same-origin proxy URL — client just plays /api/stream/:id
+    res.json({ success: true, url: `/api/stream/${encodeURIComponent(videoId)}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Stream URL extraction failed" });
+  }
+});
+
+// Proxy the actual audio bytes through our server → zero CORS issues
+app.get("/api/stream/:id", async (req, res) => {
+  const videoId = req.params.id;
+
+  // Serve local offline file if present
+  const localFile = findOfflineAudioFile(videoId);
+  if (localFile && fs.existsSync(localFile)) {
+    return res.sendFile(localFile);
+  }
+
+  try {
+    const stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
+      quality: "highestaudio",
+      filter: "audioonly",
+    });
+
+    stream.once("info", (_info: any, format: any) => {
+      const mime = format.mimeType?.split(";")[0] || "audio/mp4";
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    });
+
+    stream.on("error", (err: Error) => {
+      console.warn("[stream] ytdl stream error:", err.message);
+      if (!res.headersSent) res.status(500).json({ error: "Stream failed" });
+    });
+
+    req.on("close", () => stream.destroy());
+    stream.pipe(res);
+  } catch (err: any) {
+    console.error("[stream] Error:", err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
+
 // List all downloaded tracks
 app.get("/api/downloaded", (req, res) => {
   try {
@@ -2901,23 +2997,111 @@ async function writeTickets(tickets: any[]) {
 
 
 
-function readSessions(): any[] {
+async function fetchSessionsFromGist(): Promise<any[] | null> {
+  if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) return null;
+  const url = `https://api.github.com/gists/${process.env.GIST_ID}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": `token ${process.env.GITHUB_TOKEN}`,
+        "User-Agent": "AeroMusicServer/1.0.0"
+      }
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const fileContent = data.files?.["sessions.json"]?.content;
+    if (fileContent) {
+      return JSON.parse(fileContent);
+    }
+  } catch (err) {
+    console.error("GitHub Gist sessions read failed:", err);
+  }
+  return null;
+}
+
+async function saveSessionsToGist(value: any[]): Promise<boolean> {
+  if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) return false;
+  const url = `https://api.github.com/gists/${process.env.GIST_ID}`;
+  try {
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Authorization": `token ${process.env.GITHUB_TOKEN}`,
+        "User-Agent": "AeroMusicServer/1.0.0",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        files: {
+          "sessions.json": {
+            content: JSON.stringify(value, null, 2)
+          }
+        }
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("GitHub Gist sessions write failed:", err);
+  }
+  return false;
+}
+
+function readSessionsLocal(): any[] {
   try {
     if (fs.existsSync(sessionsFilePath)) {
       return JSON.parse(fs.readFileSync(sessionsFilePath, "utf8"));
     }
   } catch (e) {
-    console.error("Failed to read sessions:", e);
+    console.error("Failed to read sessions locally:", e);
   }
   return [];
 }
 
-function writeSessions(sessions: any[]) {
+function writeSessionsLocal(sessions: any[]) {
   try {
     fs.writeFileSync(sessionsFilePath, JSON.stringify(sessions, null, 2), "utf8");
   } catch (e) {
-    console.error("Failed to write sessions:", e);
+    console.error("Failed to write sessions locally:", e);
   }
+}
+
+async function readSessions(): Promise<any[]> {
+  // 1. Try Supabase
+  const supabaseSessions = await fetchFromSupabase("sessions");
+  if (supabaseSessions && Array.isArray(supabaseSessions)) {
+    console.log("Database: Successfully loaded sessions from primary Supabase.");
+    writeSessionsLocal(supabaseSessions);
+    return supabaseSessions;
+  }
+
+  // 2. Try GitHub Gist
+  const gistSessions = await fetchSessionsFromGist();
+  if (gistSessions && Array.isArray(gistSessions)) {
+    console.log("Database: Successfully loaded sessions from secondary GitHub Gist.");
+    writeSessionsLocal(gistSessions);
+    await saveToSupabase("sessions", gistSessions); // Attempt healing
+    return gistSessions;
+  }
+
+  // 3. Fallback to local
+  console.log("Database: Loaded sessions from local fallback sessions.json file.");
+  const localSessions = readSessionsLocal();
+  if (localSessions && localSessions.length > 0) {
+    await writeSessions(localSessions);
+  }
+  return localSessions;
+}
+
+async function writeSessions(sessions: any[]) {
+  writeSessionsLocal(sessions);
+
+  const supPromise = saveToSupabase("sessions", sessions).then((ok) => {
+    if (ok) console.log("Database: Saved sessions to primary Supabase.");
+  });
+  const gistPromise = saveSessionsToGist(sessions).then((ok) => {
+    if (ok) console.log("Database: Saved sessions to secondary GitHub Gist.");
+  });
+
+  await Promise.allSettled([supPromise, gistPromise]);
 }
 
 function hashPassword(password: string, salt: string): string {
@@ -2991,13 +3175,13 @@ app.post("/api/auth/login", async (req, res) => {
 
   // Create a session token
   const token = crypto.randomBytes(24).toString("hex");
-  const sessions = readSessions();
+  const sessions = await readSessions();
   sessions.push({
     token,
     username: user.username,
     createdAt: Date.now()
   });
-  writeSessions(sessions);
+  await writeSessions(sessions);
 
   res.json({
     success: true,
@@ -3021,7 +3205,7 @@ app.get("/api/auth/me", async (req, res) => {
     return res.status(401).json({ success: false, error: "Authorization token required." });
   }
   const token = authHeader.replace("Bearer ", "").trim();
-  const sessions = readSessions();
+  const sessions = await readSessions();
   const session = sessions.find((s) => s.token === token);
   if (!session) {
     return res.status(401).json({ success: false, error: "Invalid or expired session token." });
@@ -3054,7 +3238,7 @@ app.post("/api/auth/update-profile", async (req, res) => {
     return res.status(401).json({ success: false, error: "Authorization token required." });
   }
   const token = authHeader.replace("Bearer ", "").trim();
-  const sessions = readSessions();
+  const sessions = await readSessions();
   const session = sessions.find((s) => s.token === token);
   if (!session) {
     return res.status(401).json({ success: false, error: "Invalid or expired session token." });
@@ -3229,7 +3413,7 @@ app.post("/api/support/ticket", async (req, res) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const token = authHeader.replace("Bearer ", "").trim();
-    const sessions = readSessions();
+    const sessions = await readSessions();
     const session = sessions.find((s) => s.token === token);
     if (session) {
       username = session.username;
@@ -3517,7 +3701,7 @@ async function startServer() {
       }, 10000);
     });
 
-    ws.on("message", (rawMessage) => {
+    ws.on("message", async (rawMessage) => {
       try {
         const data = JSON.parse(rawMessage.toString());
         switch (data.type) {
@@ -3530,7 +3714,7 @@ async function startServer() {
             let room = rooms.get(roomId);
             let verifiedUsername: string | null = null;
             if (token) {
-              const sessions = readSessions();
+              const sessions = await readSessions();
               const session = sessions.find((s) => s.token === token);
               if (session) {
                 verifiedUsername = session.username;
@@ -3620,7 +3804,7 @@ async function startServer() {
 
             // Authentication & Authorization check
             if (room.hostUsername) {
-              const sessions = readSessions();
+              const sessions = await readSessions();
               const session = sessions.find((s) => s.token === token);
               if (!session || session.username !== room.hostUsername) {
                 console.warn(`Unauthorized playback change attempt by token ${token} in room ${currentRoomId} (expected host: ${room.hostUsername})`);

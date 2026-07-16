@@ -276,7 +276,7 @@ export default function MyLibrary({
   };
 
   return (
-    <div id="mylibrary-panel" className="flex-1 flex flex-col min-h-0 bg-[#121212] p-6 overflow-y-auto select-none relative custom-scrollbar">
+    <div id="mylibrary-panel" className="flex-1 flex flex-col min-h-0 bg-zinc-900 p-6 overflow-y-auto select-none relative custom-scrollbar">
       
       {/* Immersive Dynamic Backdrop Glow (Apple Music Style) */}
       {currentTrack && (

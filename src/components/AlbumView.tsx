@@ -98,7 +98,7 @@ export default function AlbumView({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121212] text-zinc-100 p-10">
+      <div className="flex-1 flex flex-col items-center justify-center bg-zinc-900 text-zinc-100 p-10">
         <Loader2 size={36} className="animate-spin text-violet-500 mb-3" />
         <p className="text-sm font-mono text-zinc-400">Resolving Album Tracks...</p>
       </div>
@@ -107,7 +107,7 @@ export default function AlbumView({
 
   if (!albumData || albumData.tracks.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121212] text-zinc-100 p-10 space-y-4">
+      <div className="flex-1 flex flex-col items-center justify-center bg-zinc-900 text-zinc-100 p-10 space-y-4">
         <p className="text-sm text-zinc-400">Could not resolve album details or tracks.</p>
         <button 
           onClick={() => onArtistClick(artistName)}
@@ -135,9 +135,9 @@ export default function AlbumView({
   const albumYear = albumData.tracks[0]?.genre || "Music";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#121212] text-zinc-100 custom-scrollbar font-sans pb-28">
+    <div className="flex-1 overflow-y-auto bg-zinc-900 text-zinc-100 custom-scrollbar font-sans pb-28">
       {/* Back navigation header */}
-      <div className="p-4 flex items-center border-b border-zinc-900/60 bg-[#121212]/80 backdrop-blur sticky top-0 z-30">
+      <div className="p-4 flex items-center border-b border-zinc-900/60 bg-zinc-900/80 backdrop-blur sticky top-0 z-30">
         <button 
           onClick={() => onArtistClick(artistName)}
           className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition text-xs font-bold cursor-pointer"
