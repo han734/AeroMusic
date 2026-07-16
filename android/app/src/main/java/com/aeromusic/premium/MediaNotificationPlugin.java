@@ -49,13 +49,26 @@ public class MediaNotificationPlugin extends Plugin {
     /** Called from JS with { title, artist, album, artwork, isPlaying, url, seekTo } */
     @PluginMethod
     public void update(PluginCall call) {
-        String title     = call.getString("title",    "AeroMusic");
-        String artist    = call.getString("artist",   "");
-        String album     = call.getString("album",    "");
-        String artwork   = call.getString("artwork",  "");
-        Boolean playing  = call.getBoolean("isPlaying", false);
-        String url       = call.getString("url",      "");
-        Integer seekTo   = call.getInt("seekTo",      -1);
+        String title     = call.getString("title");
+        if (title == null) title = "AeroMusic";
+
+        String artist    = call.getString("artist");
+        if (artist == null) artist = "";
+
+        String album     = call.getString("album");
+        if (album == null) album = "";
+
+        String artwork   = call.getString("artwork");
+        if (artwork == null) artwork = "";
+
+        Boolean playing  = call.getBoolean("isPlaying");
+        if (playing == null) playing = false;
+
+        String url       = call.getString("url");
+        if (url == null) url = "";
+
+        Double seekToDouble = call.getDouble("seekTo");
+        int seekTo = seekToDouble != null ? seekToDouble.intValue() : -1;
 
         Intent serviceIntent = new Intent(getContext(), MediaNotificationService.class);
         serviceIntent.setAction(MediaNotificationService.ACTION_UPDATE);
