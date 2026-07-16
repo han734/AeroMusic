@@ -1531,6 +1531,35 @@ async function getPipedStreamUrl(videoId: string): Promise<{ url: string; mimeTy
   return null;
 }
 
+async function getInvidiousStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
+  const instances = [
+    "https://yewtu.be",
+    "https://invidious.privacydev.net",
+    "https://invidious.lunar.icu",
+    "https://invidious.projectsegfau.lt",
+    "https://invidious.slipfox.xyz"
+  ];
+
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`);
+      if (!res.ok) continue;
+      const data = await res.json() as any;
+      if (data.adaptiveFormats && data.adaptiveFormats.length > 0) {
+        const audioStreams = data.adaptiveFormats.filter((f: any) => f.mimeType && f.mimeType.startsWith("audio/"));
+        if (audioStreams.length > 0) {
+          const url = audioStreams[0].url;
+          const mimeType = audioStreams[0].mimeType?.split(";")[0] || "audio/mp4";
+          return { url, mimeType };
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[stream-url] Invidious API fail for ${instance}:`, e.message);
+    }
+  }
+  return null;
+}
+
 async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType: string } | null> {
   const cached = streamUrlCache.get(videoId);
   if (cached && cached.expiresAt > Date.now() + 60_000) {
@@ -1561,6 +1590,15 @@ async function getYtStreamUrl(videoId: string): Promise<{ url: string; mimeType:
       const expiresAt = Date.now() + 2 * 3600_000;
       streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
       return piped;
+    }
+
+    // Try fallback to Invidious APIs
+    const invidious = await getInvidiousStreamUrl(videoId);
+    if (invidious) {
+      console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API fallback`);
+      const expiresAt = Date.now() + 2 * 3600_000;
+      streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
+      return invidious;
     }
     return null;
   }
