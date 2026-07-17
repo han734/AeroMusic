@@ -6,8 +6,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
 import android.os.PowerManager;
+import android.os.StatFs;
 import android.provider.Settings;
 import android.net.Uri;
+import android.os.Environment;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -123,6 +125,27 @@ public class MediaNotificationPlugin extends Plugin {
             getContext().startActivity(intent);
         }
         call.resolve();
+    }
+
+    /** Returns available storage space in bytes */
+    @PluginMethod
+    public void getAvailableStorage(PluginCall call) {
+        JSObject data = new JSObject();
+        try {
+            StatFs stat = new StatFs(getContext().getFilesDir().getPath());
+            long bytesAvailable;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                bytesAvailable = stat.getAvailableBytes();
+            } else {
+                //noinspection deprecation
+                bytesAvailable = (long) stat.getAvailableBlocks() * (long) stat.getBlockSize();
+            }
+            data.put("availableBytes", bytesAvailable);
+            call.resolve(data);
+        } catch (Exception e) {
+            String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+            call.reject("Failed to get storage space: " + msg);
+        }
     }
 
     @Override

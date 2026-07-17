@@ -131,13 +131,6 @@ public class MediaNotificationService extends Service implements
                     updateMediaSession();
                 }
             }
-            @Override
-            public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
-                if (MediaButtonReceiver.handleIntent(mediaSession, mediaButtonEvent) != null) {
-                    return true;
-                }
-                return super.onMediaButtonEvent(mediaButtonEvent);
-            }
         });
         
         Intent mediaButtonIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);

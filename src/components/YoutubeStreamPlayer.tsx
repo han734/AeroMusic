@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { aeroFetch, getApiBaseUrl } from "../lib/api";
 import { registerPlugin, Capacitor } from "@capacitor/core";
+import { getLocalTrackUri } from "../lib/offlineStorage";
 
 interface YoutubeStreamPlayerProps {
   videoId: string;
@@ -53,11 +54,12 @@ export default function YoutubeStreamPlayer({
   // Stream URL fetched from backend (/api/stream-url) for non-downloaded tracks
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [streamLoading, setStreamLoading] = useState(false);
+  const [localFileUri, setLocalFileUri] = useState<string | null>(null);
 
-  // Effective audio URL: prefer locally-downloaded file, then live stream
+  // Effective audio URL: prefer locally-downloaded file on DEVICE, then server cache, then live stream
   // When this is set the component uses <audio> instead of the YouTube IFrame,
   // which means background playback works natively on Android.
-  const effectiveAudioUrl = offlineAudioUrl || streamUrl;
+  const effectiveAudioUrl = localFileUri || offlineAudioUrl || streamUrl;
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
@@ -168,6 +170,32 @@ export default function YoutubeStreamPlayer({
       try { subAction.remove(); } catch (_) {}
     };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Check for TRUE offline file on device storage
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    let active = true;
+    if (!isCapacitor || !videoId) {
+      setLocalFileUri(null);
+      return;
+    }
+
+    getLocalTrackUri(videoId).then(uri => {
+      if (active) {
+        if (uri) {
+          console.log(`[YoutubeStreamPlayer] Found local device file: ${uri}`);
+          setLocalFileUri(uri);
+        } else {
+          setLocalFileUri(null);
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [videoId]);
 
   // ---------------------------------------------------------------------------
   // Auto-fetch direct stream URL from backend when videoId changes.

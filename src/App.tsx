@@ -20,6 +20,7 @@ import GlobalHeader from "./components/GlobalHeader";
 import UserProfileView from "./components/UserProfileView";
 import { Track, Playlist, UserProfile } from "./types";
 import { aeroFetch, getWebSocketUrl, getApiBaseUrl } from "./lib/api";
+import { initOfflineStorage, saveTrackOffline, getLocalTrackUri } from "./lib/offlineStorage";
 
 // Native Android media notification plugin (no-op on web/desktop)
 const MediaNotification = registerPlugin<{
@@ -494,6 +495,7 @@ export default function App() {
 
   // Load liked songs and downloaded songs on mount
   useEffect(() => {
+    initOfflineStorage();
     // Clear old resolved YouTube video caches to force re-resolution with duration filter
     try {
       const keysToRemove = [];
@@ -639,10 +641,34 @@ export default function App() {
       });
       const data = await response.json();
 
+      if (!data.success) {
+        alert(data.error || "The offline cache could not be created for this track.");
+        return;
+      }
+
+      // ─── Android/Native Local Storage Sync ───
+      // After server caches it, we pull the bytes to the phone for TRUE offline mode
+      if (Capacitor.isNativePlatform() && data.offlineFile) {
+        const serverUrl = data.offlineFile.startsWith("http")
+          ? data.offlineFile
+          : `${getApiBaseUrl() || ""}${data.offlineFile}`;
+
+        console.log(`[App] Syncing track ${resolvedId} to phone storage from ${serverUrl}`);
+        try {
+          await saveTrackOffline(resolvedId, serverUrl);
+        } catch (syncErr: any) {
+          if (syncErr.message === "STORAGE_FULL") {
+            alert("Storage Full! Please delete some songs from your device to continue downloading.");
+            return;
+          }
+          throw syncErr;
+        }
+      }
+
       const trackToDownload = {
         ...track,
         id: resolvedId,
-        offlineReady: Boolean(data.success),
+        offlineReady: true,
         offlineFile: data.offlineFile || undefined,
       };
       const updated = [...downloadedTracks.filter(t => t.id !== resolvedId), trackToDownload];
@@ -655,10 +681,6 @@ export default function App() {
 
       if (selectedPlaylist && selectedPlaylist.id === "downloaded-songs") {
         setTracksContext(updated);
-      }
-
-      if (!data.success) {
-        alert(data.error || "The offline cache could not be created for this track.");
       }
     } catch (err) {
       console.error("Error downloading track for offline playback:", err);

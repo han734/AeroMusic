@@ -1487,22 +1487,23 @@ function downloadTrackForOfflineCache(track: any): Promise<{ success: boolean; o
 
     const outputTemplate = path.join(offlineAudioDir, `${trackId}.%(ext)s`);
     const youtubeUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(trackId)}`;
-    const bundledYtDlp = path.join(currentDirname, currentDirname.endsWith("dist-server") ? ".." : "", "tools", "yt-dlp.exe");
-    const pythonLauncher = "C:\\Users\\shiya\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe";
+
+    // Dynamic yt-dlp discovery
     const candidates = [
-      { command: bundledYtDlp, args: ["--no-warnings", "--no-playlist", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0", "--output", outputTemplate, youtubeUrl] },
       { command: "yt-dlp", args: ["--no-warnings", "--no-playlist", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0", "--output", outputTemplate, youtubeUrl] },
+      { command: "python", args: ["-m", "yt_dlp", "--no-warnings", "--no-playlist", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0", "--output", outputTemplate, youtubeUrl] },
       { command: "yt-dlp.exe", args: ["--no-warnings", "--no-playlist", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0", "--output", outputTemplate, youtubeUrl] },
-      { command: pythonLauncher, args: ["-m", "yt_dlp", "--no-warnings", "--no-playlist", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0", "--output", outputTemplate, youtubeUrl] },
     ];
 
     const tryNext = (index: number) => {
       if (index >= candidates.length) {
-        resolve({ success: false, error: "yt-dlp is not installed or the download command could not be executed." });
+        resolve({ success: false, error: "yt-dlp could not be found in system PATH. Please ensure it is installed." });
         return;
       }
 
       const candidate = candidates[index];
+      console.log(`[Download] Attempting with: ${candidate.command}`);
+
       execFile(candidate.command, candidate.args, { timeout: 10 * 60 * 1000 }, (error, stdout, stderr) => {
         if (error) {
           console.warn(`Offline download attempt failed for ${track.title} with ${candidate.command}:`, stderr || error.message);
@@ -1512,9 +1513,10 @@ function downloadTrackForOfflineCache(track: any): Promise<{ success: boolean; o
 
         const cachedFile = findOfflineAudioFile(trackId);
         if (cachedFile) {
+          console.log(`[Download] Successfully cached: ${track.title} (${trackId})`);
           resolve({ success: true, offlineFile: `/api/offline-audio/${encodeURIComponent(trackId)}` });
         } else {
-          resolve({ success: false, error: "The audio file was not created." });
+          resolve({ success: false, error: "The audio file was not created. Check if ffmpeg is installed." });
         }
       });
     };
