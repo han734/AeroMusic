@@ -1201,6 +1201,20 @@ app.get("/api/resolve", async (req, res) => {
             if (v.lengthText && seconds < 60) {
               continue;
             }
+
+            // Semantic check: Filter out remix, cover, lofi, reprise, karaoke, etc. if not in original track title
+            const modifiers = ["reprise", "remix", "cover", "lofi", "lo-fi", "karaoke", "instrumental", "slowed", "speed up", "speedup", "mashup", "parody", "reaction", "review", "tutorial"];
+            const lowerTrackTitle = cleanTitle.toLowerCase();
+            let isModifierMatchError = false;
+            for (const mod of modifiers) {
+              if (lowerTitle.includes(mod) && !lowerTrackTitle.includes(mod)) {
+                isModifierMatchError = true;
+                break;
+              }
+            }
+            if (isModifierMatchError) {
+              continue;
+            }
             
             // Check embeddability
             try {
@@ -1339,6 +1353,20 @@ app.get("/api/resolve-mv", async (req, res) => {
             }
             
             if (v.lengthText && seconds < 60) {
+              continue;
+            }
+
+            // Semantic check: Filter out remix, cover, lofi, reprise, karaoke, etc. if not in original track title
+            const modifiers = ["reprise", "remix", "cover", "lofi", "lo-fi", "karaoke", "instrumental", "slowed", "speed up", "speedup", "mashup", "parody", "reaction", "review", "tutorial"];
+            const lowerTrackTitle = cleanTitle.toLowerCase();
+            let isModifierMatchError = false;
+            for (const mod of modifiers) {
+              if (lowerTitle.includes(mod) && !lowerTrackTitle.includes(mod)) {
+                isModifierMatchError = true;
+                break;
+              }
+            }
+            if (isModifierMatchError) {
               continue;
             }
             

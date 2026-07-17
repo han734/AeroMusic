@@ -5,7 +5,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
@@ -23,6 +26,7 @@ import android.support.v4.media.session.PlaybackStateCompat;
 
 import androidx.core.app.NotificationCompat;
 import androidx.media.app.NotificationCompat.MediaStyle;
+import androidx.media.session.MediaButtonReceiver;
 
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -32,7 +36,8 @@ public class MediaNotificationService extends Service implements
         MediaPlayer.OnPreparedListener,
         MediaPlayer.OnCompletionListener,
         MediaPlayer.OnErrorListener,
-        MediaPlayer.OnSeekCompleteListener {
+        MediaPlayer.OnSeekCompleteListener,
+        AudioManager.OnAudioFocusChangeListener {
 
     public static final String CHANNEL_ID       = "aeromusic_playback";
     public static final String ACTION_PLAY       = "com.aeromusic.premium.ACTION_PLAY";
@@ -50,11 +55,23 @@ public class MediaNotificationService extends Service implements
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
 
+    // Receiver for when headphones are unplugged
+    private final BroadcastReceiver becomingNoisyReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                pauseMediaPlayer();
+                broadcastAction("pause");
+            }
+        }
+    };
+
     // Native MediaPlayer for background play
     private MediaPlayer mediaPlayer;
     private String currentUrl = "";
     private boolean isPrepared = false;
     private int startPositionMs = 0;
+    private boolean resumeOnFocusGain = false;
 
     // Handler for progress updates
     private final Handler progressHandler = new Handler();
@@ -87,17 +104,16 @@ public class MediaNotificationService extends Service implements
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
 
         // MediaSessionCompat setup
-        mediaSession = new MediaSessionCompat(this, "AeroMusicSession");
+        ComponentName mbr = new ComponentName(this, MediaButtonReceiver.class);
+        mediaSession = new MediaSessionCompat(this, "AeroMusicSession", mbr, null);
         mediaSession.setCallback(new MediaSessionCompat.Callback() {
             @Override
             public void onPlay() {
-                playMediaPlayer();
-                broadcastAction("play");
+                handlePlayAction();
             }
             @Override
             public void onPause() {
-                pauseMediaPlayer();
-                broadcastAction("pause");
+                handlePauseAction();
             }
             @Override
             public void onSkipToNext() {
@@ -111,16 +127,43 @@ public class MediaNotificationService extends Service implements
             public void onSeekTo(long pos) {
                 if (mediaPlayer != null) {
                     mediaPlayer.seekTo((int) pos);
+                    updateMediaSession();
                 }
             }
+            @Override
+            public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
+                return MediaButtonReceiver.handleIntent(mediaSession, mediaButtonEvent) || super.onMediaButtonEvent(mediaButtonEvent);
+            }
         });
+        
+        Intent mediaButtonIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+        mediaButtonIntent.setClass(this, MediaButtonReceiver.class);
+        PendingIntent mbrIntent = PendingIntent.getBroadcast(this, 0, mediaButtonIntent, PendingIntent.FLAG_IMMUTABLE);
+        mediaSession.setMediaButtonReceiver(mbrIntent);
+        
+        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
         mediaSession.setActive(true);
 
         // Initialize Native MediaPlayer
         initMediaPlayer();
 
+        // Register noisy receiver
+        registerReceiver(becomingNoisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+
         // Start progress updates loop
         progressHandler.post(progressUpdater);
+    }
+
+    private void handlePlayAction() {
+        if (requestAudioFocus()) {
+            playMediaPlayer();
+            broadcastAction("play");
+        }
+    }
+
+    private void handlePauseAction() {
+        pauseMediaPlayer();
+        broadcastAction("pause");
     }
 
     private void initMediaPlayer() {
@@ -146,6 +189,8 @@ public class MediaNotificationService extends Service implements
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        MediaButtonReceiver.handleIntent(mediaSession, intent);
+        
         if (intent == null) return START_STICKY;
 
         String action = intent.getAction();
@@ -153,12 +198,10 @@ public class MediaNotificationService extends Service implements
 
         switch (action) {
             case ACTION_PLAY:
-                playMediaPlayer();
-                broadcastAction("play");
+                handlePlayAction();
                 return START_STICKY;
             case ACTION_PAUSE:
-                pauseMediaPlayer();
-                broadcastAction("pause");
+                handlePauseAction();
                 return START_STICKY;
             case ACTION_NEXT:
                 broadcastAction("next");
@@ -197,9 +240,9 @@ public class MediaNotificationService extends Service implements
             // Handle simple play/pause update
             if (isPrepared) {
                 if (lastIsPlaying) {
-                    playMediaPlayer();
+                    handlePlayAction();
                 } else {
-                    pauseMediaPlayer();
+                    handlePauseAction();
                 }
             }
 
@@ -209,7 +252,6 @@ public class MediaNotificationService extends Service implements
             }
         }
 
-        requestAudioFocus();
         updateMediaSession();
         showNotification(lastBitmap);
 
@@ -221,6 +263,16 @@ public class MediaNotificationService extends Service implements
         return START_STICKY;
     }
 
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // This ensures the service remains running even if the app is swiped away.
+        // If the music is paused, we can stop the service to be polite.
+        if (!lastIsPlaying) {
+            stopSelf();
+        }
+        super.onTaskRemoved(rootIntent);
+    }
+
     // MediaPlayer callbacks
     @Override
     public void onPrepared(MediaPlayer mp) {
@@ -230,7 +282,7 @@ public class MediaNotificationService extends Service implements
             startPositionMs = 0;
         } else {
             if (lastIsPlaying) {
-                playMediaPlayer();
+                handlePlayAction();
             }
         }
         broadcastAction("prepared");
@@ -243,6 +295,8 @@ public class MediaNotificationService extends Service implements
         updateMediaSession();
         showNotification(lastBitmap);
         broadcastAction("ended");
+        // Keep foreground status but allow dismissal if paused
+        stopForeground(false);
     }
 
     @Override
@@ -275,6 +329,8 @@ public class MediaNotificationService extends Service implements
             lastIsPlaying = false;
             updateMediaSession();
             showNotification(lastBitmap);
+            // Allow notification dismissal when paused
+            stopForeground(false);
         }
     }
 
@@ -284,12 +340,13 @@ public class MediaNotificationService extends Service implements
         MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE,  lastTitle)
                 .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, lastArtist)
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, lastBitmap)
                 .build();
         mediaSession.setMetadata(metadata);
 
         long actions = PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE
                 | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
-                | PlaybackStateCompat.ACTION_SEEK_TO;
+                | PlaybackStateCompat.ACTION_SEEK_TO | PlaybackStateCompat.ACTION_PLAY_PAUSE;
 
         int currentPos = (mediaPlayer != null && isPrepared) ? mediaPlayer.getCurrentPosition() : 0;
 
@@ -327,9 +384,11 @@ public class MediaNotificationService extends Service implements
                 .setContentText(lastArtist)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentIntent(openApp)
-                .setOngoing(true)
+                .setOngoing(lastIsPlaying)
+                .setShowWhen(false)
+                .setSilent(true)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .addAction(prevAction)
                 .addAction(playPauseAction)
                 .addAction(nextAction)
@@ -342,10 +401,14 @@ public class MediaNotificationService extends Service implements
         }
 
         Notification notification = builder.build();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        if (lastIsPlaying) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
         } else {
-            startForeground(NOTIFICATION_ID, notification);
+            notificationManager.notify(NOTIFICATION_ID, notification);
         }
     }
 
@@ -363,13 +426,15 @@ public class MediaNotificationService extends Service implements
                     CHANNEL_ID, "AeroMusic Playback", NotificationManager.IMPORTANCE_LOW);
             ch.setDescription("Now Playing controls");
             ch.setShowBadge(false);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             ch.setSound(null, null);
             notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             notificationManager.createNotificationChannel(ch);
         }
     }
 
-    private void requestAudioFocus() {
+    private boolean requestAudioFocus() {
+        int result;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             AudioAttributes aa = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -377,11 +442,47 @@ public class MediaNotificationService extends Service implements
                     .build();
             audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(aa)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(this)
                     .build();
-            audioManager.requestAudioFocus(audioFocusRequest);
+            result = audioManager.requestAudioFocus(audioFocusRequest);
         } else {
             //noinspection deprecation
-            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+            result = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+    }
+
+    @Override
+    public void onAudioFocusChange(int focusChange) {
+        switch (focusChange) {
+            case AudioManager.AUDIOFOCUS_GAIN:
+                if (mediaPlayer != null) {
+                    mediaPlayer.setVolume(1.0f, 1.0f);
+                    if (resumeOnFocusGain) {
+                        playMediaPlayer();
+                        broadcastAction("play");
+                        resumeOnFocusGain = false;
+                    }
+                }
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS:
+                pauseMediaPlayer();
+                broadcastAction("pause");
+                resumeOnFocusGain = false;
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                    pauseMediaPlayer();
+                    broadcastAction("pause");
+                    resumeOnFocusGain = true;
+                }
+                break;
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                    mediaPlayer.setVolume(0.2f, 0.2f);
+                }
+                break;
         }
     }
 
@@ -406,6 +507,7 @@ public class MediaNotificationService extends Service implements
 
     @Override
     public void onDestroy() {
+        unregisterReceiver(becomingNoisyReceiver);
         progressHandler.removeCallbacks(progressUpdater);
         if (mediaPlayer != null) {
             mediaPlayer.release();
