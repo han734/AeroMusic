@@ -63892,7 +63892,7 @@ function formatDuration(ms) {
   return `${mins}:${secs}`;
 }
 app.post("/api/search", async (req, res) => {
-  const { query } = req.body;
+  const { query, preferredGenres } = req.body;
   if (!query || typeof query !== "string" || query.trim() === "") {
     return res.status(400).json({ error: "Query is required" });
   }
@@ -63963,8 +63963,42 @@ app.post("/api/search", async (req, res) => {
     seen.add(key);
     return true;
   });
+  let sortedTracks = deduped;
   if (deduped.length > 0) {
-    return res.json({ success: true, tracks: deduped });
+    try {
+      const counts = {};
+      let maxCount = 0;
+      let dominantGenre = "";
+      for (const g of preferredGenres || []) {
+        if (!g) continue;
+        const lg = String(g).toLowerCase().trim();
+        counts[lg] = (counts[lg] || 0) + 1;
+        if (counts[lg] > maxCount) {
+          maxCount = counts[lg];
+          dominantGenre = lg;
+        }
+      }
+      const shouldBoost = preferredGenres && preferredGenres.length >= 5 && maxCount >= 3 && dominantGenre !== "";
+      const mapped = deduped.map((track, index) => {
+        let score = index;
+        const trackTitleLower = track.title.toLowerCase();
+        const queryLower = cleanQuery.toLowerCase();
+        if (trackTitleLower === queryLower || track.artist.toLowerCase() === queryLower) {
+          score -= 100;
+        } else if (trackTitleLower.includes(queryLower)) {
+          score -= 2;
+        }
+        if (shouldBoost && track.genre && track.genre.toLowerCase() === dominantGenre) {
+          score -= 15;
+        }
+        return { track, score };
+      });
+      mapped.sort((a, b) => a.score - b.score);
+      sortedTracks = mapped.map((item) => item.track);
+    } catch (e) {
+      console.warn("Failed to personalize search ranking:", e);
+    }
+    return res.json({ success: true, tracks: sortedTracks });
   }
   const localMatches = LOCAL_SONGS.filter((s) => {
     const q = cleanQuery.toLowerCase();

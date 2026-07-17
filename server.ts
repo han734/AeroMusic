@@ -759,7 +759,7 @@ function formatDuration(ms: number): string {
 
 // 2. Search Music (uses live iTunes database with localized offline fallback)
 app.post("/api/search", async (req, res) => {
-  const { query } = req.body;
+  const { query, preferredGenres } = req.body;
   if (!query || typeof query !== "string" || query.trim() === "") {
     return res.status(400).json({ error: "Query is required" });
   }
@@ -839,8 +839,54 @@ app.post("/api/search", async (req, res) => {
     return true;
   });
 
+  let sortedTracks = deduped;
   if (deduped.length > 0) {
-    return res.json({ success: true, tracks: deduped });
+    // Personalized ranking based on user listening history (preferredGenres)
+    try {
+      const counts: { [key: string]: number } = {};
+      let maxCount = 0;
+      let dominantGenre = "";
+      for (const g of preferredGenres || []) {
+        if (!g) continue;
+        const lg = String(g).toLowerCase().trim();
+        counts[lg] = (counts[lg] || 0) + 1;
+        if (counts[lg] > maxCount) {
+          maxCount = counts[lg];
+          dominantGenre = lg;
+        }
+      }
+
+      // Only boost if there is a reliable history (at least 5 plays total, and dominant language has >= 3 plays)
+      const shouldBoost = (preferredGenres && preferredGenres.length >= 5 && maxCount >= 3 && dominantGenre !== "");
+      
+      const mapped = deduped.map((track, index) => {
+        let score = index;
+        const trackTitleLower = track.title.toLowerCase();
+        const queryLower = cleanQuery.toLowerCase();
+        
+        // 1. Exact Query Matches (highest priority)
+        if (trackTitleLower === queryLower || track.artist.toLowerCase() === queryLower) {
+          score -= 100;
+        } else if (trackTitleLower.includes(queryLower)) {
+          // 2. Partial matches get a small base priority boost
+          score -= 2;
+        }
+
+        // 3. User listening language matches (medium priority)
+        if (shouldBoost && track.genre && track.genre.toLowerCase() === dominantGenre) {
+          score -= 15;
+        }
+
+        return { track, score };
+      });
+
+      mapped.sort((a, b) => a.score - b.score);
+      sortedTracks = mapped.map(item => item.track);
+    } catch (e) {
+      console.warn("Failed to personalize search ranking:", e);
+    }
+
+    return res.json({ success: true, tracks: sortedTracks });
   }
 
   // ─── Fallback: local catalog fuzzy match ───

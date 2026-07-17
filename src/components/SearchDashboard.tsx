@@ -53,10 +53,23 @@ export default function SearchDashboard({
     // Run track search and user search in parallel
     const trackSearchPromise = (async () => {
       try {
+        let preferredGenres: string[] = [];
+        try {
+          const historyJson = localStorage.getItem("aero-playback-genre-history");
+          if (historyJson) {
+            preferredGenres = JSON.parse(historyJson);
+          }
+        } catch (e) {
+          console.warn("Failed to read genre history:", e);
+        }
+
         const response = await aeroFetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: q.trim() }),
+          body: JSON.stringify({ 
+            query: q.trim(),
+            preferredGenres
+          }),
         });
         const data = await response.json();
         if (data.success && data.tracks) {

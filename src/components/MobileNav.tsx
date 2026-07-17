@@ -87,15 +87,15 @@ export default function MobileNav({
 
       <button
         onClick={() => {
-          setActiveTab("spotify-import");
+          setActiveTab("wrapped");
           onClearPlaylist();
         }}
         className={`flex flex-col items-center gap-1 cursor-pointer transition ${
-          activeTab === "spotify-import" ? "text-violet-400 font-bold" : "hover:text-white"
+          activeTab === "wrapped" ? "text-violet-400 font-bold" : "hover:text-white"
         }`}
       >
-        <Link2 size={18} />
-        <span className="text-[10px]">Spotify</span>
+        <Sparkles size={18} className="text-violet-400" />
+        <span className="text-[10px]">Wrapped</span>
       </button>
     </nav>
   );

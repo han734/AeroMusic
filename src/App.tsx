@@ -18,6 +18,7 @@ import AuthPanel from "./components/AuthPanel";
 import AlbumView from "./components/AlbumView";
 import GlobalHeader from "./components/GlobalHeader";
 import UserProfileView from "./components/UserProfileView";
+import AeroWrapped from "./components/AeroWrapped";
 import { Track, Playlist, UserProfile } from "./types";
 import { aeroFetch, getWebSocketUrl, getApiBaseUrl } from "./lib/api";
 import { initOfflineStorage, saveTrackOffline, getLocalTrackUri } from "./lib/offlineStorage";
@@ -980,6 +981,27 @@ export default function App() {
 
 
 
+  // Track real-time listening duration stats
+  useEffect(() => {
+    if (!isPlaying || !currentTrack) return;
+    const interval = setInterval(() => {
+      try {
+        const statsJson = localStorage.getItem("aero-listening-stats");
+        let stats = statsJson ? JSON.parse(statsJson) : {
+          totalDuration: 0,
+          songPlays: {},
+          artistPlays: {},
+          genrePlays: {}
+        };
+        stats.totalDuration = (stats.totalDuration || 0) + 2; // update every 2 seconds
+        localStorage.setItem("aero-listening-stats", JSON.stringify(stats));
+      } catch (e) {
+        console.error("Failed to update duration stats:", e);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isPlaying, currentTrack]);
+
   // Reset video override when track changes
   useEffect(() => {
     setActiveVideoIdOverride(null);
@@ -1003,6 +1025,61 @@ export default function App() {
   }, [isTrackMatch]);
 
   const handleTrackSelect = useCallback(async (track: Track, context: Track[]) => {
+    // Record listening pattern history and play statistics
+    if (track) {
+      try {
+        // 1. Sliding window of last 20 played genres (for search personalization)
+        if (track.genre) {
+          const historyJson = localStorage.getItem("aero-playback-genre-history");
+          let history: string[] = historyJson ? JSON.parse(historyJson) : [];
+          history.push(track.genre.toLowerCase());
+          if (history.length > 20) {
+            history = history.slice(-20);
+          }
+          localStorage.setItem("aero-playback-genre-history", JSON.stringify(history));
+        }
+
+        // 2. Cumulative listening stats (for AeroWrapped)
+        const statsJson = localStorage.getItem("aero-listening-stats");
+        let stats = statsJson ? JSON.parse(statsJson) : {
+          totalDuration: 0,
+          songPlays: {},
+          artistPlays: {},
+          genrePlays: {}
+        };
+
+        if (!stats.songPlays) stats.songPlays = {};
+        if (!stats.artistPlays) stats.artistPlays = {};
+        if (!stats.genrePlays) stats.genrePlays = {};
+
+        const sId = track.id;
+        if (!stats.songPlays[sId]) {
+          stats.songPlays[sId] = {
+            id: track.id,
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            thumbnail: track.thumbnail,
+            genre: track.genre,
+            count: 0
+          };
+        }
+        stats.songPlays[sId].count += 1;
+
+        const artist = track.artist || "Unknown Artist";
+        stats.artistPlays[artist] = (stats.artistPlays[artist] || 0) + 1;
+
+        if (track.genre) {
+          const genre = track.genre;
+          stats.genrePlays[genre] = (stats.genrePlays[genre] || 0) + 1;
+        }
+
+        localStorage.setItem("aero-listening-stats", JSON.stringify(stats));
+      } catch (e) {
+        console.error("Failed to record play stats:", e);
+      }
+    }
+
     let resolvedTrack = { ...track };
 
     if (
@@ -1528,6 +1605,16 @@ export default function App() {
               onArtistClick={handleArtistClick}
               onDeleteDownloadedTrack={handleDeleteDownloadedTrack}
               onDeleteDownloadedTracksBulk={handleDeleteDownloadedTracksBulk}
+            />
+          )}
+
+          {activeTab === "wrapped" && (
+            <AeroWrapped
+              onTrackSelect={handleTrackSelect}
+              tracksContext={tracksContext}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              onPlayPauseToggle={handlePlayPauseToggle}
             />
           )}
 

@@ -131,6 +131,21 @@ export default function Sidebar({
           <span>Co-Listening Room</span>
         </button>
 
+        <button
+          onClick={() => {
+            setActiveTab("wrapped");
+            onSelectPlaylist(null as any);
+          }}
+          className={`flex items-center gap-4 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
+            activeTab === "wrapped"
+              ? "bg-zinc-800 text-white shadow-sm"
+              : "hover:text-white hover:bg-zinc-800/30"
+          }`}
+        >
+          <Sparkles size={18} className="text-violet-400 animate-pulse animate-duration-1000" />
+          <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-indigo-300">AeroWrapped</span>
+        </button>
+
       </nav>
 
       {/* Library & Playlists */}
