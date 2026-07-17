@@ -21,24 +21,8 @@ export function getApiBaseUrl(): string {
     // Ignore localStorage failures
   }
 
-  const isElectron = typeof window !== "undefined" && (
-    window.navigator.userAgent.toLowerCase().includes("electron") ||
-    !!(window as any).electronAPI
-  );
-  if (isElectron) {
-    return "";
-  }
-
-  // Detect mobile Webview / Capacitor environment
-  const isMobileWebView = typeof window !== "undefined" && !isElectron && (
-    !!(window as any).Capacitor ||
-    window.location.hostname === "aero-music.app" ||
-    window.location.protocol === "file:" ||
-    /Android|iPhone|iPad|iPod|webOS/i.test(window.navigator.userAgent)
-  );
-
-  // Standalone mobile APK fallback to auto-detected build machine IP
-  if (isMobileWebView && DEFAULT_API_ENDPOINT) {
+  // Default to Render cloud endpoint on all platforms out-of-the-box
+  if (DEFAULT_API_ENDPOINT) {
     return DEFAULT_API_ENDPOINT;
   }
   
@@ -76,7 +60,19 @@ export function saveApiBaseUrl(url: string): void {
 
 // Wrapper for fetch that automatically prepends the current active server base URL
 export async function aeroFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const baseUrl = getApiBaseUrl();
+  let baseUrl = getApiBaseUrl();
+
+  // Detect Electron environment
+  const isElectron = typeof window !== "undefined" && (
+    window.navigator.userAgent.toLowerCase().includes("electron") ||
+    !!(window as any).electronAPI
+  );
+
+  // For offline file downloads and metadata management, Electron must always request its local in-process Express server!
+  if (isElectron && (endpoint.startsWith("/api/download") || endpoint.startsWith("/api/downloaded") || endpoint.startsWith("/api/offline-audio"))) {
+    baseUrl = "http://localhost:3000";
+  }
+
   const fullUrl = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
   console.log(`[aeroFetch] Requesting: ${fullUrl}`);
   return fetch(fullUrl, options);

@@ -240,7 +240,15 @@ export default function MyLibrary({
         if (offlineMatch?.offlineReady && offlineMatch.offlineFile) {
           try {
             // Fetch the real MP3 file bytes from the server's cache
-            const res = await fetch(offlineMatch.offlineFile);
+            const isElectron = typeof window !== "undefined" && (
+              window.navigator.userAgent.toLowerCase().includes("electron") ||
+              !!(window as any).electronAPI
+            );
+            const resolvedUrl = offlineMatch.offlineFile.startsWith("http")
+              ? offlineMatch.offlineFile
+              : `${(isElectron && offlineMatch.offlineFile.startsWith("/api/offline-audio")) ? "http://localhost:3000" : (getApiBaseUrl() || "")}${offlineMatch.offlineFile}`;
+
+            const res = await fetch(resolvedUrl);
             if (res.ok) {
               mp3Data = await res.blob();
             } else {

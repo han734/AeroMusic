@@ -115,8 +115,15 @@ export default function YoutubeStreamPlayer({
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
+  const isElectronPlayer = typeof window !== "undefined" && (
+    window.navigator.userAgent.toLowerCase().includes("electron") ||
+    !!(window as any).electronAPI
+  );
+
   const resolvedAudioUrl = effectiveAudioUrl
-    ? (effectiveAudioUrl.startsWith("http") ? effectiveAudioUrl : `${getApiBaseUrl() || ""}${effectiveAudioUrl}`)
+    ? (effectiveAudioUrl.startsWith("http")
+        ? effectiveAudioUrl
+        : `${(isElectronPlayer && effectiveAudioUrl.startsWith("/api/offline-audio")) ? "http://localhost:3000" : (getApiBaseUrl() || "")}${effectiveAudioUrl}`)
     : "";
 
   // ---------------------------------------------------------------------------
