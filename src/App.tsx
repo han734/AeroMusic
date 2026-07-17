@@ -497,20 +497,6 @@ export default function App() {
   // Load liked songs and downloaded songs on mount
   useEffect(() => {
     initOfflineStorage();
-    // Clear old resolved YouTube video caches to force re-resolution with duration filter
-    try {
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("resolved-yt-")) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-      console.log(`Cleared ${keysToRemove.length} resolved cache keys.`);
-    } catch (e) {
-      console.warn("Failed to clear old resolved cache keys:", e);
-    }
 
     try {
       const stored = localStorage.getItem("premium-liked-tracks");
@@ -925,6 +911,27 @@ export default function App() {
         setIsRestoringSession(false);
         return;
       }
+
+      // Optimistically load cached session to avoid blocking startup (Render spin-up delays)
+      let hasCachedSession = false;
+      const cached = localStorage.getItem("aero-cached-profile");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setCurrentUser(parsed);
+          if (parsed.playlists) setPlaylists(parsed.playlists);
+          if (parsed.likedTracks) setLikedTracks(parsed.likedTracks);
+          hasCachedSession = true;
+        } catch (e) {
+          console.warn("Corrupted cached profile on startup:", e);
+        }
+      }
+
+      // If we have a cached profile, we can unblock the loader instantly!
+      if (hasCachedSession) {
+        setIsRestoringSession(false);
+      }
+
       try {
         const res = await aeroFetch("/api/auth/me", {
           headers: { Authorization: `Bearer ${token}` }
@@ -947,23 +954,30 @@ export default function App() {
           // Only remove session token if explicitly unauthorized or forbidden by server
           if (res.status === 401 || res.status === 403) {
             localStorage.removeItem("aero-session-token");
+            localStorage.removeItem("aero-cached-profile");
+            setCurrentUser(null);
+            setPlaylists([]);
+            setLikedTracks([]);
           } else {
-            // Otherwise, treat as a temporary server issue and load cached session
+            // Otherwise, treat as a temporary server issue and fallback to cached session
             throw new Error(`Temporary server error (${res.status})`);
           }
         }
       } catch (err) {
-        console.error("Session restoration failed, loading cached profile for offline resilience:", err);
-        const cached = localStorage.getItem("aero-cached-profile");
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            setCurrentUser(parsed);
-            if (parsed.playlists) setPlaylists(parsed.playlists);
-            if (parsed.likedTracks) setLikedTracks(parsed.likedTracks);
-            setIsOfflineMode(true);
-          } catch {
-            // Keep currentUser as null if cache is corrupted
+        console.error("Session verification failed, continuing with cached session:", err);
+        // Fallback: if we didn't have cached session during startup (e.g. first time but token exists), load cache now
+        if (!hasCachedSession) {
+          const cachedFallback = localStorage.getItem("aero-cached-profile");
+          if (cachedFallback) {
+            try {
+              const parsed = JSON.parse(cachedFallback);
+              setCurrentUser(parsed);
+              if (parsed.playlists) setPlaylists(parsed.playlists);
+              if (parsed.likedTracks) setLikedTracks(parsed.likedTracks);
+              setIsOfflineMode(true);
+            } catch {
+              // Ignore
+            }
           }
         }
       } finally {
