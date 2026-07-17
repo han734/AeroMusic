@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { aeroFetch, getApiBaseUrl } from "../lib/api";
-import { registerPlugin } from "@capacitor/core";
+import { registerPlugin, Capacitor } from "@capacitor/core";
 
 interface YoutubeStreamPlayerProps {
   videoId: string;
@@ -27,7 +27,7 @@ declare global {
 }
 
 const MediaNotification = registerPlugin<any>("MediaNotification");
-const isCapacitor = typeof window !== "undefined" && !!(window as any).Capacitor;
+const isCapacitor = Capacitor.isNativePlatform();
 
 export default function YoutubeStreamPlayer({
   videoId,
@@ -180,7 +180,7 @@ export default function YoutubeStreamPlayer({
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          const chosenUrl = isCapacitor ? (data.directUrl || data.url) : data.url;
+          const chosenUrl = data.url;
           setStreamUrl(chosenUrl);
         } else {
           console.warn("[AeroMusic] stream-url failed, falling back to YouTube IFrame");

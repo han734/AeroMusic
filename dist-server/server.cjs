@@ -64522,22 +64522,24 @@ async function getPipedStreamUrl(videoId) {
     "https://pipedapi.drgns.space",
     "https://pipedapi.darkness.services"
   ];
-  for (const instance of instances) {
+  const tasks = instances.map(async (instance) => {
     try {
-      const res = await fetch(`${instance}/streams/${videoId}`);
-      if (!res.ok) continue;
+      const res = await fetch(`${instance}/streams/${videoId}`, { signal: AbortSignal.timeout(4e3) });
+      if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json();
       if (data.audioStreams && data.audioStreams.length > 0) {
         const stream = data.audioStreams[0];
-        const url = stream.url;
-        const mimeType = stream.mimeType || "audio/mp4";
-        return { url, mimeType };
+        return { url: stream.url, mimeType: stream.mimeType || "audio/mp4" };
       }
     } catch (e) {
-      console.warn(`[stream-url] Piped API fail for ${instance}:`, e.message);
     }
+    throw new Error("Failed resolving on " + instance);
+  });
+  try {
+    return await Promise.any(tasks);
+  } catch (err) {
+    return null;
   }
-  return null;
 }
 async function getInvidiousStreamUrl(videoId) {
   const instances = [
@@ -64547,10 +64549,10 @@ async function getInvidiousStreamUrl(videoId) {
     "https://invidious.projectsegfau.lt",
     "https://invidious.slipfox.xyz"
   ];
-  for (const instance of instances) {
+  const tasks = instances.map(async (instance) => {
     try {
-      const res = await fetch(`${instance}/api/v1/videos/${videoId}`);
-      if (!res.ok) continue;
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: AbortSignal.timeout(4e3) });
+      if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json();
       if (data.adaptiveFormats && data.adaptiveFormats.length > 0) {
         const audioStreams = data.adaptiveFormats.filter((f) => f.mimeType && f.mimeType.startsWith("audio/"));
@@ -64561,46 +64563,54 @@ async function getInvidiousStreamUrl(videoId) {
         }
       }
     } catch (e) {
-      console.warn(`[stream-url] Invidious API fail for ${instance}:`, e.message);
     }
+    throw new Error("Failed resolving on " + instance);
+  });
+  try {
+    return await Promise.any(tasks);
+  } catch (err) {
+    return null;
   }
-  return null;
 }
 async function getYtStreamUrl(videoId) {
   const cached = streamUrlCache.get(videoId);
   if (cached && cached.expiresAt > Date.now() + 6e4) {
     return { url: cached.url, mimeType: cached.mimeType };
   }
-  try {
-    const info = await import_ytdl_core.default.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-    const format = import_ytdl_core.default.chooseFormat(info.formats, {
-      quality: "highestaudio",
-      filter: "audioonly"
-    });
-    if (!format || !format.url) throw new Error("No audio format found");
-    const expMatch = format.url.match(/[?&]expire=(\d+)/);
-    const expiresAt = expMatch ? parseInt(expMatch[1]) * 1e3 : Date.now() + 4 * 36e5;
-    const mimeType = format.mimeType?.split(";")[0] || "audio/mp4";
-    streamUrlCache.set(videoId, { url: format.url, mimeType, expiresAt });
-    return { url: format.url, mimeType };
-  } catch (err) {
-    console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
-    const piped = await getPipedStreamUrl(videoId);
-    if (piped) {
-      console.log(`[stream-url] Resolved ${videoId} successfully via Piped API fallback`);
-      const expiresAt = Date.now() + 2 * 36e5;
-      streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
-      return piped;
+  const isRender = !!process.env.RENDER;
+  if (!isRender) {
+    try {
+      const info = await import_ytdl_core.default.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+      const format = import_ytdl_core.default.chooseFormat(info.formats, {
+        quality: "highestaudio",
+        filter: "audioonly"
+      });
+      if (format && format.url) {
+        const expMatch = format.url.match(/[?&]expire=(\d+)/);
+        const expiresAt = expMatch ? parseInt(expMatch[1]) * 1e3 : Date.now() + 4 * 36e5;
+        const mimeType = format.mimeType?.split(";")[0] || "audio/mp4";
+        streamUrlCache.set(videoId, { url: format.url, mimeType, expiresAt });
+        return { url: format.url, mimeType };
+      }
+    } catch (err) {
+      console.warn(`[stream-url] ytdl-core failed for ${videoId}:`, err.message);
     }
-    const invidious = await getInvidiousStreamUrl(videoId);
-    if (invidious) {
-      console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API fallback`);
-      const expiresAt = Date.now() + 2 * 36e5;
-      streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
-      return invidious;
-    }
-    return null;
   }
+  const piped = await getPipedStreamUrl(videoId);
+  if (piped) {
+    console.log(`[stream-url] Resolved ${videoId} successfully via Piped API parallel fallback`);
+    const expiresAt = Date.now() + 2 * 36e5;
+    streamUrlCache.set(videoId, { url: piped.url, mimeType: piped.mimeType, expiresAt });
+    return piped;
+  }
+  const invidious = await getInvidiousStreamUrl(videoId);
+  if (invidious) {
+    console.log(`[stream-url] Resolved ${videoId} successfully via Invidious API parallel fallback`);
+    const expiresAt = Date.now() + 2 * 36e5;
+    streamUrlCache.set(videoId, { url: invidious.url, mimeType: invidious.mimeType, expiresAt });
+    return invidious;
+  }
+  return null;
 }
 app.get("/api/stream-url", async (req, res) => {
   const videoId = (req.query.id || "").trim();
