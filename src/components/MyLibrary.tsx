@@ -188,6 +188,8 @@ export default function MyLibrary({
       return;
     }
     let m3uContent = "#EXTM3U\n";
+    const apiBase = getApiBaseUrl() || window.location.origin;
+
     tracks.forEach((track) => {
       let durationSec = 180;
       if (track.duration && typeof track.duration === "string" && track.duration.includes(":")) {
@@ -202,7 +204,7 @@ export default function MyLibrary({
       const artist = track.artist || "Unknown Artist";
       const title = track.title || "Unknown Title";
       m3uContent += `#EXTINF:${durationSec},${artist} - ${title}\n`;
-      m3uContent += `${artist} - ${title}.mp3\n`;
+      m3uContent += `${apiBase}/api/stream/${track.id}\n`;
     });
 
     const blob = new Blob([m3uContent], { type: "text/plain;charset=utf-8" });

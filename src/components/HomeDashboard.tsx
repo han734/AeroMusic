@@ -390,11 +390,13 @@ export default function HomeDashboard({
       return;
     }
     let m3uContent = "#EXTM3U\n";
+    const apiBase = getApiBaseUrl() || window.location.origin;
+
     tracks.forEach((track) => {
       const parts = track.duration.split(":").map(Number);
       const durationSec = parts.length === 2 ? parts[0] * 60 + parts[1] : 180;
       m3uContent += `#EXTINF:${durationSec},${track.artist} - ${track.title}\n`;
-      m3uContent += `${track.artist} - ${track.title}.mp3\n`;
+      m3uContent += `${apiBase}/api/stream/${track.id}\n`;
     });
 
     const blob = new Blob([m3uContent], { type: "text/m3u" });
