@@ -64269,6 +64269,18 @@ app.get("/api/resolve", async (req, res) => {
             if (v.lengthText && seconds < 60) {
               continue;
             }
+            const modifiers = ["reprise", "remix", "cover", "lofi", "lo-fi", "karaoke", "instrumental", "slowed", "speed up", "speedup", "mashup", "parody", "reaction", "review", "tutorial"];
+            const lowerTrackTitle = cleanTitle.toLowerCase();
+            let isModifierMatchError = false;
+            for (const mod of modifiers) {
+              if (lowerTitle.includes(mod) && !lowerTrackTitle.includes(mod)) {
+                isModifierMatchError = true;
+                break;
+              }
+            }
+            if (isModifierMatchError) {
+              continue;
+            }
             try {
               const oembedResp = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${v.videoId}&format=json`);
               if (oembedResp.ok) {
@@ -64378,6 +64390,18 @@ app.get("/api/resolve-mv", async (req, res) => {
               continue;
             }
             if (v.lengthText && seconds < 60) {
+              continue;
+            }
+            const modifiers = ["reprise", "remix", "cover", "lofi", "lo-fi", "karaoke", "instrumental", "slowed", "speed up", "speedup", "mashup", "parody", "reaction", "review", "tutorial"];
+            const lowerTrackTitle = cleanTitle.toLowerCase();
+            let isModifierMatchError = false;
+            for (const mod of modifiers) {
+              if (lowerTitle.includes(mod) && !lowerTrackTitle.includes(mod)) {
+                isModifierMatchError = true;
+                break;
+              }
+            }
+            if (isModifierMatchError) {
               continue;
             }
             try {

@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -132,7 +133,10 @@ public class MediaNotificationService extends Service implements
             }
             @Override
             public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
-                return MediaButtonReceiver.handleIntent(mediaSession, mediaButtonEvent) || super.onMediaButtonEvent(mediaButtonEvent);
+                if (MediaButtonReceiver.handleIntent(mediaSession, mediaButtonEvent) != null) {
+                    return true;
+                }
+                return super.onMediaButtonEvent(mediaButtonEvent);
             }
         });
         
@@ -421,6 +425,7 @@ public class MediaNotificationService extends Service implements
     }
 
     private void createNotificationChannel() {
+        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
                     CHANNEL_ID, "AeroMusic Playback", NotificationManager.IMPORTANCE_LOW);
@@ -428,7 +433,6 @@ public class MediaNotificationService extends Service implements
             ch.setShowBadge(false);
             ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             ch.setSound(null, null);
-            notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             notificationManager.createNotificationChannel(ch);
         }
     }

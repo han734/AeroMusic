@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
+import android.net.Uri;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -94,6 +97,31 @@ public class MediaNotificationPlugin extends Plugin {
         Intent serviceIntent = new Intent(getContext(), MediaNotificationService.class);
         serviceIntent.setAction(MediaNotificationService.ACTION_STOP);
         getContext().startService(serviceIntent);
+        call.resolve();
+    }
+
+    /** Checks if the app is ignored by battery optimizations */
+    @PluginMethod
+    public void isIgnoringBatteryOptimizations(PluginCall call) {
+        JSObject data = new JSObject();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            data.put("isIgnoring", pm.isIgnoringBatteryOptimizations(getContext().getPackageName()));
+        } else {
+            data.put("isIgnoring", true);
+        }
+        call.resolve(data);
+    }
+
+    /** Opens battery optimization settings for the app */
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent();
+            intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            getContext().startActivity(intent);
+        }
         call.resolve();
     }
 
