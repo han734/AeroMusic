@@ -64638,25 +64638,32 @@ app.get("/api/stream/:id", async (req, res) => {
     return res.sendFile(localFile);
   }
   try {
-    const stream = (0, import_ytdl_core.default)(`https://www.youtube.com/watch?v=${videoId}`, {
-      quality: "highestaudio",
-      filter: "audioonly"
+    const streamInfo = await getYtStreamUrl(videoId);
+    if (!streamInfo || !streamInfo.url) {
+      return res.status(404).json({ error: "Stream URL not found" });
+    }
+    const response = await fetch(streamInfo.url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
     });
-    stream.once("info", (_info, format) => {
-      const mime = format.mimeType?.split(";")[0] || "audio/mp4";
-      res.setHeader("Content-Type", mime);
-      res.setHeader("Accept-Ranges", "bytes");
-      res.setHeader("Cache-Control", "no-store");
-      res.setHeader("Access-Control-Allow-Origin", "*");
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to fetch stream from mirror: ${response.statusText}`);
+    }
+    res.setHeader("Content-Type", streamInfo.mimeType || "audio/mp4");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const nodeStream = response.body;
+    req.on("close", () => {
+      try {
+        nodeStream.destroy();
+      } catch (_) {
+      }
     });
-    stream.on("error", (err) => {
-      console.warn("[stream] ytdl stream error:", err.message);
-      if (!res.headersSent) res.status(500).json({ error: "Stream failed" });
-    });
-    req.on("close", () => stream.destroy());
-    stream.pipe(res);
+    nodeStream.pipe(res);
   } catch (err) {
-    console.error("[stream] Error:", err);
+    console.error("[stream] Error in proxy stream:", err.message);
     if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });

@@ -4,6 +4,23 @@ import { DEFAULT_API_ENDPOINT } from "./default_endpoint";
 
 // Returns the saved API base URL or defaults to the current origin
 export function getApiBaseUrl(): string {
+  try {
+    const saved = localStorage.getItem("aero-api-endpoint");
+    if (saved) {
+      const isSavedLocalIp = saved.includes("192.168.") || saved.includes("10.") || saved.includes("172.") || saved.includes("localhost") || saved.includes("127.0.0.1");
+      const isCloudDefault = DEFAULT_API_ENDPOINT && (DEFAULT_API_ENDPOINT.includes("onrender.com") || DEFAULT_API_ENDPOINT.startsWith("https"));
+
+      if (isSavedLocalIp && isCloudDefault) {
+        // Clear the stale local/LAN IP so we default back to the cloud URL
+        localStorage.removeItem("aero-api-endpoint");
+      } else {
+        return saved;
+      }
+    }
+  } catch (e) {
+    // Ignore localStorage failures
+  }
+
   const isElectron = typeof window !== "undefined" && (
     window.navigator.userAgent.toLowerCase().includes("electron") ||
     !!(window as any).electronAPI
@@ -19,29 +36,6 @@ export function getApiBaseUrl(): string {
     window.location.protocol === "file:" ||
     /Android|iPhone|iPad|iPod|webOS/i.test(window.navigator.userAgent)
   );
-
-  try {
-    const saved = localStorage.getItem("aero-api-endpoint");
-    if (saved) {
-      const isSavedLocalIp = saved.includes("192.168.") || saved.includes("10.") || saved.includes("172.") || saved.includes("localhost") || saved.includes("127.0.0.1");
-      const isCloudDefault = DEFAULT_API_ENDPOINT && (DEFAULT_API_ENDPOINT.includes("onrender.com") || DEFAULT_API_ENDPOINT.startsWith("https"));
-
-      if (isSavedLocalIp && isCloudDefault) {
-        // Clear the stale local/LAN IP so we default back to the cloud URL
-        localStorage.removeItem("aero-api-endpoint");
-      } else {
-        const isCapacitor = typeof window !== "undefined" && !!(window as any).Capacitor;
-        const isLocalhost = typeof window !== "undefined" && !isCapacitor && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-        
-        if (isLocalhost && isSavedLocalIp) {
-          return "http://localhost:3000";
-        }
-        return saved;
-      }
-    }
-  } catch (e) {
-    // Ignore localStorage failures in some restrictive webviews
-  }
 
   // Standalone mobile APK fallback to auto-detected build machine IP
   if (isMobileWebView && DEFAULT_API_ENDPOINT) {
@@ -84,7 +78,7 @@ export function saveApiBaseUrl(url: string): void {
 export async function aeroFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const baseUrl = getApiBaseUrl();
   const fullUrl = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
-  
+  console.log(`[aeroFetch] Requesting: ${fullUrl}`);
   return fetch(fullUrl, options);
 }
 
